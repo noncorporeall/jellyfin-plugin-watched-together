@@ -6,9 +6,9 @@ appear on the TV, and Jellyfin updates reach the TV without reinstalling anythin
 
 - First launch asks for your server address and remembers it. To change it later, press ▲
   while it says "Connecting…", or use Jellyfin's own **Select server** menu.
-- Remote media keys, Back and Exit work as in the regular Tizen app (the exit, media-key and
-  server-switching parts need the Watched Together plugin on the server, which supplies the
-  small bridge the page uses to talk to the app).
+- Remote media keys, Back and Exit work as in the regular Tizen app. Exiting from Jellyfin's
+  menu, the Play/Pause key on playback screens and **Select server** rely on a small bridge
+  that the Watched Together plugin adds to the server's page.
 - Installs alongside any other Jellyfin build (different app id: `WtJfHost01.JellyfinHosted`).
 
 **Install:** download `Jellyfin-Plus-Tizen.wgt` from the latest release and install it with the
