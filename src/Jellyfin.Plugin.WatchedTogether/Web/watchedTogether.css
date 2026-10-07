@@ -123,20 +123,315 @@
     .wt-live-dot { animation: none; }
 }
 
-/* The live watcher's position, along the top edge of the artwork */
+/* The live watcher's position, along the bottom edge of the artwork. The fill glides
+   forward between refreshes (width transition set by the script) and has a moving sheen. */
 .wt-live-progress {
     position: absolute;
-    top: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    bottom: 0;
+    height: 5px;
     z-index: 3;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.55);
+    overflow: visible;
 }
 
 .wt-live-progress-fill {
+    position: relative;
     height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #12a347 0%, var(--wt-green) 40%, #7cf0a6 50%, var(--wt-green) 60%, #12a347 100%);
+    background-size: 300% 100%;
+    animation: wt-sheen 2.4s linear infinite;
+}
+
+.wt-live-progress-head {
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    margin-top: -4.5px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 2px var(--wt-green), 0 0 8px 2px rgba(29, 185, 84, 0.8);
+    animation: wt-glow 1.6s ease-in-out infinite;
+}
+
+.wt-live-progress.wt-paused .wt-live-progress-fill {
+    background: #8a8f98;
+    animation: none;
+}
+
+.wt-live-progress.wt-paused .wt-live-progress-head {
+    box-shadow: 0 0 0 2px #8a8f98;
+    animation: none;
+}
+
+@keyframes wt-sheen {
+    from { background-position: 100% 0; }
+    to { background-position: -200% 0; }
+}
+
+@keyframes wt-glow {
+    0%, 100% { box-shadow: 0 0 0 2px var(--wt-green), 0 0 4px 1px rgba(29, 185, 84, 0.5); }
+    50% { box-shadow: 0 0 0 2px var(--wt-green), 0 0 12px 4px rgba(29, 185, 84, 0.9); }
+}
+
+/* "Join" (ask to watch together) */
+.wt-join {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    margin-left: 0.4em;
+    padding: 0.2em 0.6em 0.2em 0.45em;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(15, 15, 15, 0.85);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.7em;
+    font-size: max(10px, calc(var(--wt-pct, 16) * 0.34cqw));
+    cursor: pointer;
+    box-shadow: 0 0 0 1.5px var(--wt-green), 0 1px 4px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+
+.wt-join .material-icons {
+    font-size: 1.3em;
+}
+
+.wt-join:hover,
+.wt-join:focus-visible {
     background: var(--wt-green);
+    outline: none;
+}
+
+.wt-join:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Medals on the Most Popular shelves */
+.wt-medal {
+    position: absolute;
+    top: 0;
+    left: calc(var(--wt-pct, 16) * 0.25cqw);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+}
+
+.wt-medal-ribbon {
+    display: block;
+    width: calc(var(--wt-pct, 16) * 0.62cqw);
+    height: calc(var(--wt-pct, 16) * 0.55cqw);
+    min-width: 11px;
+    min-height: 10px;
+    margin-bottom: -2px;
+    background: linear-gradient(90deg, #b3202a 0 33%, #f2f2f2 33% 67%, #2a4fb3 67% 100%);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%);
+}
+
+.wt-medal-disc {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9em;
+    height: 1.9em;
+    width: calc(var(--wt-pct, 16) * 1cqw);
+    height: calc(var(--wt-pct, 16) * 1cqw);
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.wt-medal-num {
+    font-weight: 800;
+    line-height: 1;
+    font-size: 0.85em;
+    font-size: max(10px, calc(var(--wt-pct, 16) * 0.48cqw));
+}
+
+.wt-gold .wt-medal-disc {
+    background: radial-gradient(circle at 35% 30%, #fff6c8 0%, #f6cf3a 35%, #c99712 75%, #9c7108 100%);
+    border: 2px solid #8a6400;
+    color: #5a3f00;
+}
+
+.wt-silver .wt-medal-disc {
+    background: radial-gradient(circle at 35% 30%, #ffffff 0%, #d9dde2 40%, #a3aab3 80%, #7d848d 100%);
+    border: 2px solid #6b727a;
+    color: #343a40;
+}
+
+.wt-bronze .wt-medal-disc {
+    background: radial-gradient(circle at 35% 30%, #ffe0c2 0%, #dc9a5c 40%, #a8642b 80%, #7f4a1d 100%);
+    border: 2px solid #6e3f15;
+    color: #3d2108;
+}
+
+.wt-plain {
+    top: calc(var(--wt-pct, 16) * 0.2cqw);
+}
+
+.wt-plain .wt-medal-disc {
+    background: rgba(15, 15, 15, 0.82);
+    border: 2px solid rgba(255, 255, 255, 0.55);
+    color: #fff;
+}
+
+/* Toasts */
+.wt-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5em;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    max-width: min(92vw, 34em);
+    padding: 0.8em 1em;
+    border-radius: 10px;
+    background: rgba(24, 24, 24, 0.96);
+    color: #fff;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    transform: translate(-50%, 160%);
+    transition: transform 0.25s ease;
+    pointer-events: none;
+}
+
+.wt-toast.wt-show {
+    transform: translate(-50%, 0);
+    pointer-events: auto;
+}
+
+.wt-toast-action {
+    flex: none;
+    border: 0;
+    background: none;
+    color: var(--wt-green, #1db954);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.wt-spinner {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-right: 0.6em;
+    vertical-align: -0.1em;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #1db954;
+    border-radius: 50%;
+    animation: wt-spin 0.8s linear infinite;
+}
+
+@keyframes wt-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Incoming invite */
+.wt-invite {
+    position: fixed;
+    right: 1.5em;
+    bottom: 1.5em;
+    z-index: 100001;
+    width: min(92vw, 24em);
+    padding: 1.1em 1.1em 0;
+    border-radius: 12px;
+    background: rgba(24, 24, 24, 0.97);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.6), 0 10px 32px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    animation: wt-pop 0.25s ease-out;
+}
+
+@keyframes wt-pop {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+.wt-invite-head {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+}
+
+.wt-invite .wt-invite-avatar {
+    width: 3em;
+    height: 3em;
+    margin: 0;
+    font-size: 1em;
+    border-color: #1db954;
+}
+
+.wt-invite-title {
+    font-size: 1.05em;
+}
+
+.wt-invite-item {
+    opacity: 0.75;
+    margin-top: 0.2em;
+}
+
+.wt-invite-note {
+    margin-top: 0.8em;
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.wt-invite-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6em;
+    margin: 1em 0;
+}
+
+.wt-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.55em 1.1em;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wt-btn-quiet {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.wt-btn-go {
+    background: #1db954;
+    color: #fff;
+}
+
+.wt-invite-timer {
+    height: 3px;
+    margin: 0 -1.1em;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.wt-invite-timer-fill {
+    width: 100%;
+    height: 100%;
+    background: #1db954;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wt-live-progress-fill,
+    .wt-live-progress-head,
+    .wt-spinner,
+    .wt-invite {
+        animation: none;
+    }
 }
 
 .wt-caption {
@@ -164,4 +459,8 @@
 .wt-caption-text {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.wt-invite .wt-initials {
+    font-size: 1.1em;
 }

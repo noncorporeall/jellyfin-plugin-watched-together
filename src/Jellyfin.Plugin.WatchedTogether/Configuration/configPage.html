@@ -4,7 +4,7 @@
     <title>Watched Together</title>
 </head>
 <body>
-<div data-role="page" id="watchedTogetherConfigPage" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+<div data-role="page" id="watchedTogetherConfigPage" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form id="watchedTogetherConfigForm">
@@ -70,6 +70,41 @@
                     <input is="emby-input" type="number" id="MaxAvatarsPerCard" min="1" max="8" label="Profile pictures per card before showing +N" />
                 </div>
 
+                <h3 class="sectionTitle">Watch together</h3>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="EnableWatchTogether" /><span>Show a "Join" button on live cards</span></label>
+                    <div class="fieldDescription">Clicking it asks the person watching to start SyncPlay together. Nothing happens unless they accept. If they're already in a SyncPlay group, you join it directly. Invites appear in the web client and web-based apps.</div>
+                </div>
+
+                <h3 class="sectionTitle">Most Popular shelves</h3>
+                <p class="fieldDescription">Ranked by total watch time from the <b>Playback Reporting</b> plugin, which must be installed. After changing titles or switching a shelf on, enable it in Home Screen Sections' Section Settings.</p>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="PopularMoviesEnabled" /><span>Most Popular Movies shelf</span></label>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="PopularMoviesTitle" label="Movies shelf title" />
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="PopularShowsEnabled" /><span>Most Popular Shows shelf</span></label>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="PopularShowsTitle" label="Shows shelf title" />
+                </div>
+                <div class="selectContainer">
+                    <select is="emby-select" id="PopularDays" label="Time frame">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="180">Last 6 months</option>
+                        <option value="365">Last year</option>
+                        <option value="0">All time</option>
+                    </select>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="PopularCount" min="1" max="50" label="Items per shelf" />
+                    <div class="fieldDescription">1st, 2nd and 3rd get gold, silver and bronze medals; the rest show their rank number.</div>
+                </div>
+
                 <h3 class="sectionTitle">Privacy</h3>
                 <p class="fieldDescription">Ticked users' viewing is never shown to anyone. Ticked libraries never appear on the shelf.</p>
                 <h4>Don't share activity from these users</h4>
@@ -100,10 +135,10 @@
         (function () {
             var pluginId = 'd73b0b70-2b96-4358-861f-78d5edb72753';
             var page = document.querySelector('#watchedTogetherConfigPage');
-            var textFields = ['SectionTitle'];
-            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'AvatarSizePercent', 'ItemsScannedPerUser', 'CacheSeconds'];
+            var textFields = ['SectionTitle', 'PopularMoviesTitle', 'PopularShowsTitle'];
+            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'AvatarSizePercent', 'PopularDays', 'PopularCount', 'ItemsScannedPerUser', 'CacheSeconds'];
             var boolFields = ['IncludeMovies', 'IncludeEpisodes', 'IncludeMusicVideos', 'IncludeInProgress',
-                'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption', 'ShowLiveSessions'];
+                'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption', 'ShowLiveSessions', 'EnableWatchTogether', 'PopularMoviesEnabled', 'PopularShowsEnabled'];
 
             function escapeHtml(v) {
                 return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
