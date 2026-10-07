@@ -55,7 +55,42 @@ internal static class IntegrationRegistrar
 
         register.Invoke(null, new object?[] { payload });
         logger.LogInformation("[WatchedTogether] Registered home screen section '{Title}'", title);
+
+        RegisterSectionName(pluginInterface.Assembly, title, logger);
         return true;
+    }
+
+    /// <summary>
+    /// Home Screen Sections looks up every section's name in its translation packs. With no entry for
+    /// our section id, 3.0.x falls back to the literal text "Genre Section" in its admin table.
+    /// Adding our title to its English pack (which every language falls back to) fixes the label.
+    /// </summary>
+    private static void RegisterSectionName(Assembly homeScreenSectionsAssembly, string title, ILogger logger)
+    {
+        try
+        {
+            Type? pluginType = homeScreenSectionsAssembly.GetType("Jellyfin.Plugin.HomeScreenSections.HomeScreenSectionsPlugin");
+            Type? translationManagerType = homeScreenSectionsAssembly.GetType("Jellyfin.Plugin.HomeScreenSections.Library.ITranslationManager");
+
+            object? plugin = pluginType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null);
+            IServiceProvider? services = pluginType?.GetProperty("ServiceProvider", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(plugin) as IServiceProvider;
+            object? translationManager = translationManagerType == null ? null : services?.GetService(translationManagerType);
+            MethodInfo? update = translationManagerType?.GetMethod("UpdateTranslationPack");
+
+            if (translationManager == null || update == null)
+            {
+                logger.LogInformation("[WatchedTogether] Home Screen Sections has no translation manager to name our section; its admin table may show a generic label");
+                return;
+            }
+
+            JObject pack = new JObject { { Plugin.SectionId, title } };
+            update.Invoke(translationManager, new object?[] { "en", pack });
+            logger.LogInformation("[WatchedTogether] Registered section name '{Title}' with Home Screen Sections", title);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[WatchedTogether] Could not register the section name with Home Screen Sections");
+        }
     }
 
     /// <summary>
