@@ -55,6 +55,27 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets how long (seconds) the server-wide activity snapshot is cached.</summary>
     public int CacheSeconds { get; set; } = 120;
 
+    /// <summary>Gets or sets a value indicating whether live cards offer a "Watch together" button (SyncPlay invite).</summary>
+    public bool EnableWatchTogether { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether the Most Popular Movies shelf is offered.</summary>
+    public bool PopularMoviesEnabled { get; set; } = true;
+
+    /// <summary>Gets or sets the Most Popular Movies shelf title.</summary>
+    public string PopularMoviesTitle { get; set; } = "Most Popular Movies";
+
+    /// <summary>Gets or sets a value indicating whether the Most Popular Shows shelf is offered.</summary>
+    public bool PopularShowsEnabled { get; set; } = true;
+
+    /// <summary>Gets or sets the Most Popular Shows shelf title.</summary>
+    public string PopularShowsTitle { get; set; } = "Most Popular Shows";
+
+    /// <summary>Gets or sets the popularity window in days (0 = all time).</summary>
+    public int PopularDays { get; set; } = 30;
+
+    /// <summary>Gets or sets how many items each popularity shelf holds.</summary>
+    public int PopularCount { get; set; } = 5;
+
     /// <summary>Gets or sets user IDs whose activity is never shared.</summary>
     public string[] ExcludedUserIds { get; set; } = Array.Empty<string>();
 

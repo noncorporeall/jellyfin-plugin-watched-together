@@ -69,6 +69,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
     {
         RecentActivityService.InvalidateCache();
+        PopularityService.InvalidateCache();
 
         // Re-register so a changed shelf title takes effect without a restart.
         try

@@ -1,4 +1,5 @@
 using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -31,6 +32,7 @@ public class ResultsHandler
     private readonly IUserManager _userManager;
     private readonly IDtoService _dtoService;
     private readonly RecentActivityService _activity;
+    private readonly PopularityService _popularity;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResultsHandler"/> class.
@@ -41,11 +43,13 @@ public class ResultsHandler
         IUserDataManager userDataManager,
         IDtoService dtoService,
         ISessionManager sessionManager,
+        IApplicationPaths appPaths,
         ILogger<ResultsHandler> logger)
     {
         _userManager = userManager;
         _dtoService = dtoService;
         _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, logger);
+        _popularity = new PopularityService(libraryManager, appPaths, logger);
     }
 
     /// <summary>
@@ -73,4 +77,34 @@ public class ResultsHandler
         IReadOnlyList<BaseItemDto> dtos = _dtoService.GetBaseItemDtos(items, dtoOptions, viewer);
         return new QueryResult<BaseItemDto>(null, dtos.Count, dtos);
     }
+
+    /// <summary>Fills the Most Popular Movies shelf.</summary>
+    /// <param name="request">Request from Home Screen Sections.</param>
+    /// <returns>Items in rank order.</returns>
+    public QueryResult<BaseItemDto> GetPopularMovies(SectionRequest request) => Popular(request, PopularityService.MoviesSectionId);
+
+    /// <summary>Fills the Most Popular Shows shelf.</summary>
+    /// <param name="request">Request from Home Screen Sections.</param>
+    /// <returns>Items in rank order.</returns>
+    public QueryResult<BaseItemDto> GetPopularShows(SectionRequest request) => Popular(request, PopularityService.ShowsSectionId);
+
+    private QueryResult<BaseItemDto> Popular(SectionRequest request, string sectionId)
+    {
+        User? viewer = _userManager.GetUserById(request.UserId);
+        if (viewer == null)
+        {
+            return new QueryResult<BaseItemDto>();
+        }
+
+        List<BaseItem> items = _popularity.GetShelfFor(viewer, sectionId).Select(x => x.Item).ToList();
+        IReadOnlyList<BaseItemDto> dtos = _dtoService.GetBaseItemDtos(items, DtoOptionsForCards(), viewer);
+        return new QueryResult<BaseItemDto>(null, dtos.Count, dtos);
+    }
+
+    private static DtoOptions DtoOptionsForCards() => new DtoOptions
+    {
+        Fields = new[] { ItemFields.PrimaryImageAspectRatio },
+        ImageTypeLimit = 1,
+        ImageTypes = new[] { ImageType.Thumb, ImageType.Backdrop, ImageType.Primary }
+    };
 }

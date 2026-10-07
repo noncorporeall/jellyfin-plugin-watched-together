@@ -68,7 +68,8 @@ public class WatchedTogetherController : ControllerBase
                 Detail = w.Detail,
                 IsLive = w.IsLive,
                 Progress = w.Progress,
-                IsPaused = w.IsPaused
+                IsPaused = w.IsPaused,
+                RuntimeSeconds = w.RuntimeSeconds
             }).ToList();
         }
 
@@ -80,6 +81,8 @@ public class WatchedTogetherController : ControllerBase
             MaxAvatarsPerCard = Math.Clamp(config.MaxAvatarsPerCard, 1, 8),
             AvatarSizePercent = Math.Clamp(config.AvatarSizePercent, 5, 40),
             LiveRefreshSeconds = config.ShowLiveSessions ? 15 : 0,
+            WatchTogether = config.ShowLiveSessions && config.EnableWatchTogether,
+            ViewerId = viewer.Id.ToString("N"),
             Items = items
         };
     }
@@ -141,6 +144,12 @@ public class WatchersResponse
     /// <summary>Gets or sets how often the browser re-checks live sessions (0 = off).</summary>
     public int LiveRefreshSeconds { get; set; }
 
+    /// <summary>Gets or sets a value indicating whether live cards show a "Watch together" button.</summary>
+    public bool WatchTogether { get; set; }
+
+    /// <summary>Gets or sets the signed-in user's id (no dashes).</summary>
+    public string ViewerId { get; set; } = string.Empty;
+
     /// <summary>Gets or sets item id (no dashes) → watchers, newest first.</summary>
     public Dictionary<string, List<WatcherDto>> Items { get; set; } = new();
 }
@@ -174,4 +183,7 @@ public class WatcherDto
 
     /// <summary>Gets or sets a value indicating whether their live playback is paused.</summary>
     public bool IsPaused { get; set; }
+
+    /// <summary>Gets or sets the item's length in seconds when live (for animating progress).</summary>
+    public double? RuntimeSeconds { get; set; }
 }

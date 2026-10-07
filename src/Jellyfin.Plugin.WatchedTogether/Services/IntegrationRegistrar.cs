@@ -17,7 +17,8 @@ internal static class IntegrationRegistrar
     private const string IndexTransformationId = "c949e7b8-d47c-4312-a4f4-ea3820c4ce87";
 
     /// <summary>
-    /// Registers the shelf with Home Screen Sections.
+    /// Registers our shelves with Home Screen Sections: the recently-watched shelf and the two
+    /// Most Popular shelves (unless switched off).
     /// </summary>
     /// <returns>True when registration succeeded.</returns>
     public static bool RegisterSection(ILogger logger)
@@ -29,23 +30,6 @@ internal static class IntegrationRegistrar
             return false;
         }
 
-        string? title = Plugin.Instance?.Configuration.SectionTitle;
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            title = "Recently Watched on This Server";
-        }
-
-        JObject payload = new JObject
-        {
-            { "id", Plugin.SectionId },
-            { "displayText", title },
-            { "limit", 1 },
-            { "additionalData", string.Empty },
-            { "resultsAssembly", typeof(ResultsHandler).Assembly.FullName },
-            { "resultsClass", typeof(ResultsHandler).FullName },
-            { "resultsMethod", nameof(ResultsHandler.GetResults) }
-        };
-
         MethodInfo? register = pluginInterface.GetMethod("RegisterSection");
         if (register == null)
         {
@@ -53,11 +37,46 @@ internal static class IntegrationRegistrar
             return false;
         }
 
+        Configuration.PluginConfiguration config = Plugin.Instance?.Configuration ?? new Configuration.PluginConfiguration();
+
+        Register(register, pluginInterface.Assembly, Plugin.SectionId,
+            Title(config.SectionTitle, "Recently Watched on This Server"), nameof(ResultsHandler.GetResults), logger);
+
+        if (config.PopularMoviesEnabled)
+        {
+            Register(register, pluginInterface.Assembly, PopularityService.MoviesSectionId,
+                Title(config.PopularMoviesTitle, "Most Popular Movies"), nameof(ResultsHandler.GetPopularMovies), logger);
+        }
+
+        if (config.PopularShowsEnabled)
+        {
+            Register(register, pluginInterface.Assembly, PopularityService.ShowsSectionId,
+                Title(config.PopularShowsTitle, "Most Popular Shows"), nameof(ResultsHandler.GetPopularShows), logger);
+        }
+
+        return true;
+    }
+
+    private static string Title(string? configured, string fallback) =>
+        string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
+
+    private static void Register(MethodInfo register, Assembly homeScreenSectionsAssembly, string sectionId, string title, string resultsMethod, ILogger logger)
+    {
+        JObject payload = new JObject
+        {
+            { "id", sectionId },
+            { "displayText", title },
+            { "limit", 1 },
+            { "additionalData", string.Empty },
+            { "resultsAssembly", typeof(ResultsHandler).Assembly.FullName },
+            { "resultsClass", typeof(ResultsHandler).FullName },
+            { "resultsMethod", resultsMethod }
+        };
+
         register.Invoke(null, new object?[] { payload });
         logger.LogInformation("[WatchedTogether] Registered home screen section '{Title}'", title);
 
-        RegisterSectionName(pluginInterface.Assembly, title, logger);
-        return true;
+        RegisterSectionName(homeScreenSectionsAssembly, sectionId, title, logger);
     }
 
     /// <summary>
@@ -65,7 +84,7 @@ internal static class IntegrationRegistrar
     /// our section id, 3.0.x falls back to the literal text "Genre Section" in its admin table.
     /// Adding our title to its English pack (which every language falls back to) fixes the label.
     /// </summary>
-    private static void RegisterSectionName(Assembly homeScreenSectionsAssembly, string title, ILogger logger)
+    private static void RegisterSectionName(Assembly homeScreenSectionsAssembly, string sectionId, string title, ILogger logger)
     {
         try
         {
@@ -83,7 +102,7 @@ internal static class IntegrationRegistrar
                 return;
             }
 
-            JObject pack = new JObject { { Plugin.SectionId, title } };
+            JObject pack = new JObject { { sectionId, title } };
             update.Invoke(translationManager, new object?[] { "en", pack });
             logger.LogInformation("[WatchedTogether] Registered section name '{Title}' with Home Screen Sections", title);
         }

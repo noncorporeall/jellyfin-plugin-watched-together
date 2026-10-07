@@ -21,6 +21,7 @@ namespace Jellyfin.Plugin.WatchedTogether.Services;
 /// <param name="IsLive">Whether they are playing it right now.</param>
 /// <param name="Progress">For live watchers, how far through they are (0–1), when known.</param>
 /// <param name="IsPaused">For live watchers, whether playback is paused.</param>
+/// <param name="RuntimeSeconds">For live watchers, the item's length, so browsers can animate progress.</param>
 public sealed record Watcher(
     Guid UserId,
     string UserName,
@@ -30,7 +31,8 @@ public sealed record Watcher(
     string? Detail,
     bool IsLive = false,
     double? Progress = null,
-    bool IsPaused = false);
+    bool IsPaused = false,
+    double? RuntimeSeconds = null);
 
 /// <summary>A card on the shelf and the people who watched it.</summary>
 /// <param name="ItemId">The item shown on the card (a movie, an episode, or a series when grouped).</param>
@@ -266,7 +268,8 @@ public class RecentActivityService
                 detail,
                 IsLive: true,
                 Progress: progress,
-                IsPaused: session.PlayState?.IsPaused ?? false)));
+                IsPaused: session.PlayState?.IsPaused ?? false,
+                RuntimeSeconds: item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / (double)TimeSpan.TicksPerSecond : null)));
         }
 
         return result;
