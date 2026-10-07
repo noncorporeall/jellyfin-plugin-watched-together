@@ -11,8 +11,13 @@ appear on the TV, and Jellyfin updates reach the TV without reinstalling anythin
   that the Watched Together plugin adds to the server's page.
 - Installs alongside any other Jellyfin build (different app id: `WtJfHost01.JellyfinHosted`).
 
-**Install:** download `Jellyfin-Plus-Tizen.wgt` from the latest release and install it with the
+**Install:** download `WatchedTogether-TV.wgt` from the latest release and install it with the
 [Samsung Jellyfin Installer](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer)
 ("custom .wgt"), with Developer Mode on. The installer signs it with your Samsung certificate.
+
+> Keep "Jellyfin" out of the file name. The installer treats any file whose name contains
+> "Jellyfin" as its own Jellyfin build: it skips signing it with your certificate and applies
+> patches meant for the official app, and the TV then rejects it as "already installed with a
+> different signature".
 
 The app icon is Jellyfin's, from [jellyfin-tizen](https://github.com/jellyfin/jellyfin-tizen).
