@@ -3,6 +3,22 @@
     "guid": "d73b0b70-2b96-4358-861f-78d5edb72753",
     "versions": [
       {
+        "version": "1.0.3.12",
+        "changelog": "Release v1.0.3",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/noncorporeall/jellyfin-plugin-watched-together/releases/download/v1.0.3/watched-together_1.0.3.12.zip",
+        "checksum": "449c3efedfae175740143e942b2c0730",
+        "timestamp": "2026-10-07T23:25:53Z"
+      },
+      {
+        "version": "1.0.3.10",
+        "changelog": "Release v1.0.3",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/noncorporeall/jellyfin-plugin-watched-together/releases/download/v1.0.3/watched-together_1.0.3.10.zip",
+        "checksum": "c2745b995148553521ea9d5d45981c79",
+        "timestamp": "2026-10-07T23:25:53Z"
+      },
+      {
         "version": "1.0.2.12",
         "changelog": "Release v1.0.2",
         "targetAbi": "12.1.0.0",
