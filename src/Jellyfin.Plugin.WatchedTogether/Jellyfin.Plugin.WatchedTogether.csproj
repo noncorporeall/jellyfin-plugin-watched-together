@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Build for a specific Jellyfin release with:
+      dotnet build -c Release -p:JellyfinVersion=10.11.11   (Jellyfin 10.11.x, .NET 9)
+      dotnet build -c Release -p:JellyfinVersion=12.1.0     (Jellyfin 12.x,   .NET 10)
+  -->
+  <PropertyGroup>
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.11.11</JellyfinVersion>
+    <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
+    <TargetFramework Condition="$(JellyfinVersion.StartsWith('12.'))">net10.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.WatchedTogether</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.WatchedTogether</AssemblyName>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Supplied by the Jellyfin server at runtime; never shipped in the plugin zip. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+    <!-- Must be the server's own copy so JObject payloads are the same type Home Screen Sections expects. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\configPage.html" />
+    <None Remove="Web\watchedTogether.js" />
+    <EmbeddedResource Include="Web\watchedTogether.js" />
+    <None Remove="Web\watchedTogether.css" />
+    <EmbeddedResource Include="Web\watchedTogether.css" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,74 @@
+/* Watched Together — avatar badges on the home screen shelf */
+
+.wt-avatars {
+    position: absolute;
+    top: 0.45em;
+    left: 0.45em;
+    z-index: 3;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    pointer-events: auto;
+}
+
+.wt-avatar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9em;
+    height: 1.9em;
+    margin-left: -0.55em;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.75);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    color: #fff;
+    font-size: 0.8em;
+    font-weight: 600;
+    line-height: 1;
+    user-select: none;
+}
+
+.wt-avatar:first-child {
+    margin-left: 0;
+}
+
+.wt-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.wt-avatar.wt-more {
+    background-color: rgba(20, 20, 20, 0.85);
+    font-size: 0.72em;
+}
+
+.wt-caption {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3em;
+    opacity: 0.8;
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wt-caption-icon {
+    font-size: 1em !important;
+}
+
+.wt-caption-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Bigger badges on TV-style layouts */
+.layout-tv .wt-avatar {
+    width: 2.3em;
+    height: 2.3em;
+}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Watched Together</title>
+</head>
+<body>
+<div data-role="page" id="watchedTogetherConfigPage" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="watchedTogetherConfigForm">
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Watched Together</h2>
+                    <p class="fieldDescription">
+                        Adds a shelf to the home screen showing what other people on this server have watched recently,
+                        with their profile pictures on each card. Requires the <b>Home Screen Sections</b>,
+                        <b>File Transformation</b> and <b>Plugin Pages</b> plugins. After installing, enable the
+                        "Watched Together" section in Home Screen Sections' settings.
+                    </p>
+                </div>
+
+                <h3 class="sectionTitle">Shelf</h3>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="SectionTitle" label="Shelf title" />
+                    <div class="fieldDescription">Shown above the row on everyone's home screen.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="LookbackDays" min="1" max="365" label="Look back (days)" />
+                    <div class="fieldDescription">Only plays within this many days appear.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="MaxItems" min="1" max="100" label="Maximum cards on the shelf" />
+                </div>
+
+                <h3 class="sectionTitle">What counts</h3>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeMovies" /><span>Movies</span></label>
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeEpisodes" /><span>TV episodes</span></label>
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeMusicVideos" /><span>Music videos</span></label>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeInProgress" /><span>Include things people started but haven't finished</span></label>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="GroupEpisodesBySeries" /><span>Show one card per series instead of per episode</span></label>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="HideOwnActivity" /><span>Hide each viewer's own activity from their shelf</span></label>
+                </div>
+
+                <h3 class="sectionTitle">Who watched it</h3>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="ShowAvatars" /><span>Show profile pictures on the cards</span></label>
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="ShowNamesCaption" /><span>Show a "watched by" caption under each card</span></label>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="MaxAvatarsPerCard" min="1" max="8" label="Profile pictures per card before showing +N" />
+                </div>
+
+                <h3 class="sectionTitle">Privacy</h3>
+                <p class="fieldDescription">Ticked users' viewing is never shown to anyone. Ticked libraries never appear on the shelf.</p>
+                <h4>Don't share activity from these users</h4>
+                <div id="excludedUsers"></div>
+                <h4>Never show items from these libraries</h4>
+                <div id="excludedLibraries"></div>
+
+                <h3 class="sectionTitle">Advanced</h3>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="ItemsScannedPerUser" min="5" max="500" label="Recent items scanned per user" />
+                    <div class="fieldDescription">Raise this if busy users crowd others off the shelf.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="CacheSeconds" min="0" max="3600" label="Refresh interval (seconds)" />
+                    <div class="fieldDescription">How long the server reuses its activity snapshot before rebuilding it.</div>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = 'd73b0b70-2b96-4358-861f-78d5edb72753';
+            var page = document.querySelector('#watchedTogetherConfigPage');
+            var textFields = ['SectionTitle'];
+            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'ItemsScannedPerUser', 'CacheSeconds'];
+            var boolFields = ['IncludeMovies', 'IncludeEpisodes', 'IncludeMusicVideos', 'IncludeInProgress',
+                'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption'];
+
+            function escapeHtml(v) {
+                return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            function normalise(id) {
+                return String(id || '').replace(/-/g, '').toLowerCase();
+            }
+
+            function renderChecklist(container, entries, selectedIds, cssClass) {
+                var selected = (selectedIds || []).map(normalise);
+                var html = '';
+                entries.forEach(function (entry) {
+                    var checked = selected.indexOf(normalise(entry.id)) !== -1 ? ' checked' : '';
+                    html += '<div class="checkboxContainer"><label>' +
+                        '<input is="emby-checkbox" type="checkbox" class="' + cssClass + '" data-id="' + escapeHtml(entry.id) + '"' + checked + ' />' +
+                        '<span>' + escapeHtml(entry.name) + '</span></label></div>';
+                });
+                container.innerHTML = html || '<p class="fieldDescription">None found.</p>';
+            }
+
+            function collectChecked(cssClass) {
+                return Array.prototype.map.call(page.querySelectorAll('.' + cssClass + ':checked'), function (el) {
+                    return el.getAttribute('data-id');
+                });
+            }
+
+            function load() {
+                Dashboard.showLoadingMsg();
+                Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getUsers(),
+                    ApiClient.getVirtualFolders()
+                ]).then(function (results) {
+                    var config = results[0];
+                    var users = results[1] || [];
+                    var folders = results[2] || [];
+
+                    textFields.forEach(function (f) { page.querySelector('#' + f).value = config[f] || ''; });
+                    numberFields.forEach(function (f) { page.querySelector('#' + f).value = config[f]; });
+                    boolFields.forEach(function (f) { page.querySelector('#' + f).checked = !!config[f]; });
+
+                    renderChecklist(page.querySelector('#excludedUsers'),
+                        users.map(function (u) { return { id: u.Id, name: u.Name }; }),
+                        config.ExcludedUserIds, 'wtExcludedUser');
+
+                    renderChecklist(page.querySelector('#excludedLibraries'),
+                        folders.map(function (f) { return { id: f.ItemId, name: f.Name }; }),
+                        config.ExcludedLibraryIds, 'wtExcludedLibrary');
+                }).finally(function () {
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            page.addEventListener('pageshow', load);
+
+            page.querySelector('#watchedTogetherConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    textFields.forEach(function (f) { config[f] = page.querySelector('#' + f).value; });
+                    numberFields.forEach(function (f) {
+                        var n = parseInt(page.querySelector('#' + f).value, 10);
+                        if (!isNaN(n)) { config[f] = n; }
+                    });
+                    boolFields.forEach(function (f) { config[f] = page.querySelector('#' + f).checked; });
+                    config.ExcludedUserIds = collectChecked('wtExcludedUser');
+                    config.ExcludedLibraryIds = collectChecked('wtExcludedLibrary');
+                    return ApiClient.updatePluginConfiguration(pluginId, config);
+                }).then(Dashboard.processPluginConfigurationUpdateResult)
+                  .finally(function () { Dashboard.hideLoadingMsg(); });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
