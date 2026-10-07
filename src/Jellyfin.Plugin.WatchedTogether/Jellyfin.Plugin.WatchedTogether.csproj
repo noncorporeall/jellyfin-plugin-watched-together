@@ -39,6 +39,8 @@
     <EmbeddedResource Include="Web\watchedTogether.js" />
     <None Remove="Web\watchedTogether.css" />
     <EmbeddedResource Include="Web\watchedTogether.css" />
+    <None Remove="Web\tizenBridge.js" />
+    <EmbeddedResource Include="Web\tizenBridge.js" />
   </ItemGroup>
 
 </Project>

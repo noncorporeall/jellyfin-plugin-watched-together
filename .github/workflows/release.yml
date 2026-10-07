@@ -72,9 +72,24 @@ jobs:
           name: plugin-${{ matrix.abiSuffix }}
           path: dist/*.zip
 
+  tizen-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package the hosted Samsung TV app (unsigned .wgt; the installer signs it)
+        run: |
+          mkdir -p dist
+          cd tizen-app && zip -r -X ../dist/Jellyfin-Plus-Tizen.wgt . -x '.*'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tizen-app
+          path: dist/Jellyfin-Plus-Tizen.wgt
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, tizen-app]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,9 +106,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/*.zip --clobber
+            gh release upload "${GITHUB_REF_NAME}" dist/*.zip dist/*.wgt --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" dist/*.zip \
+            gh release create "${GITHUB_REF_NAME}" dist/*.zip dist/*.wgt \
               --title "Watched Together ${GITHUB_REF_NAME}" \
               --generate-notes
           fi

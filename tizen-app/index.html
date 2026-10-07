@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;">
+    <title>Jellyfin+</title>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+</head>
+<body>
+    <!-- Connecting splash -->
+    <section id="connecting" class="screen" hidden>
+        <img class="logo" src="icon.png" alt="">
+        <div class="spinner" aria-hidden="true"></div>
+        <h1 id="connectingText">Connecting…</h1>
+        <p class="hint">Press <span class="key">▲</span> to change server</p>
+    </section>
+
+    <!-- Server setup -->
+    <section id="setup" class="screen" hidden>
+        <img class="logo" src="icon.png" alt="">
+        <h1>Connect to your Jellyfin server</h1>
+        <p class="sub">Enter the address you use to reach Jellyfin, for example <b>192.168.1.50:8096</b></p>
+        <input id="serverInput" class="focusable" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://192.168.1.50:8096">
+        <div class="row">
+            <button id="connectButton" class="focusable primary" type="button">Connect</button>
+        </div>
+        <p id="setupError" class="error" role="alert"></p>
+        <p class="hint">Press <span class="key">OK</span> on the address to type it, then select <b>Connect</b>.</p>
+    </section>
+
+    <!-- Can't reach server -->
+    <section id="failed" class="screen" hidden>
+        <img class="logo" src="icon.png" alt="">
+        <h1>Can't reach your server</h1>
+        <p id="failedText" class="sub"></p>
+        <div class="row">
+            <button id="retryButton" class="focusable primary" type="button">Try again</button>
+            <button id="changeButton" class="focusable" type="button">Change server</button>
+        </div>
+    </section>
+
+    <!-- The server's own Jellyfin web client -->
+    <iframe id="frame" title="Jellyfin" allow="autoplay; fullscreen; encrypted-media" allowfullscreen hidden></iframe>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -100,6 +100,11 @@
         return (typeof p === 'number' && isFinite(p)) ? Math.round(p * 100) + '%' : null;
     }
 
+    function isAttached(el) {
+        // Node.isConnected is missing on older TV browser engines.
+        return !!el && (el.isConnected === undefined ? document.documentElement.contains(el) : el.isConnected);
+    }
+
     function apiClient() {
         return window.ApiClient || null;
     }
@@ -442,7 +447,7 @@
             state.lookup = lookup;
             state.settings = settings;
             cards.forEach(function (card) {
-                if (!card.isConnected) { return; }
+                if (!isAttached(card)) { return; }
                 decorateCard(card, lookup[normaliseId(card.getAttribute('data-id'))], settings);
             });
         });
@@ -591,7 +596,7 @@
             window.removeEventListener('keydown', onKey, true);
             document.removeEventListener('focusin', onFocusIn, true);
             if (backdrop.parentNode) { backdrop.parentNode.removeChild(backdrop); }
-            if (previousFocus && previousFocus.focus && previousFocus.isConnected) {
+            if (previousFocus && previousFocus.focus && isAttached(previousFocus)) {
                 try { previousFocus.focus(); } catch (err) { /* ignore */ }
             }
         }
@@ -876,7 +881,7 @@
             if (!response) { return; }
             var sections = pick(response, 'Sections') || {};
             pendingCards.forEach(function (entry) {
-                if (!entry.card.isConnected) { return; }
+                if (!isAttached(entry.card)) { return; }
                 var map = sections[entry.sectionId] || {};
                 var info = null;
                 var id = normaliseId(entry.card.getAttribute('data-id'));

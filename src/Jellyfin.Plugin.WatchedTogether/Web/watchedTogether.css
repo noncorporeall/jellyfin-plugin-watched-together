@@ -235,7 +235,7 @@
     z-index: 100000;
     display: flex;
     align-items: center;
-    gap: 1em;
+    max-width: 92vw;
     max-width: min(92vw, 34em);
     padding: 0.8em 1em;
     border-radius: 10px;
@@ -254,6 +254,7 @@
 
 .wt-toast-action {
     flex: none;
+    margin-left: 1em;
     border: 0;
     background: none;
     color: var(--wt-green, #1db954);
@@ -291,7 +292,6 @@
     display: flex !important;
     align-items: center;
     justify-content: center;
-    gap: 0.3em;
     opacity: 0.8;
     font-size: 0.85em;
     white-space: nowrap;
@@ -307,6 +307,11 @@
 
 .wt-caption-icon {
     font-size: 1em !important;
+    margin-right: 0.3em;
+}
+
+.wt-caption .wt-live-dot {
+    margin-right: 0.35em;
 }
 
 .wt-caption-text {
@@ -336,7 +341,10 @@
 /* Dialogs: "watch together or on my own?" and incoming invites */
 .wt-dialog-backdrop {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 100001;
     display: flex;
     align-items: center;
@@ -346,7 +354,8 @@
 }
 
 .wt-dialog {
-    width: min(94vw, 28em);
+    width: 28em;
+    max-width: 94vw;
     padding: 1.4em 1.4em 0;
     border-radius: 14px;
     background: #1c1c1c;
@@ -364,7 +373,10 @@
 .wt-dialog-head {
     display: flex;
     align-items: center;
-    gap: 0.9em;
+}
+
+.wt-dialog-avatars {
+    margin-right: 0.9em;
 }
 
 .wt-dialog-avatars {
@@ -406,8 +418,11 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 0.7em;
     margin: 1.3em 0 1.4em;
+}
+
+.wt-dialog-actions .wt-btn + .wt-btn {
+    margin-left: 0.7em;
 }
 
 .wt-btn {
@@ -431,8 +446,7 @@
 }
 
 /* Remote / gamepad users navigate by focus, so the focused button must be unmistakable */
-.wt-btn:focus,
-.wt-btn:focus-visible {
+.wt-btn:focus {
     outline: none;
     box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(29, 185, 84, 0.6);
     transform: scale(1.05);
@@ -453,7 +467,8 @@
 /* Bigger, easier targets on TV layouts */
 .layout-tv .wt-dialog {
     font-size: 1.25em;
-    width: min(90vw, 34em);
+    width: 34em;
+    max-width: 90vw;
 }
 
 .layout-tv .wt-btn {
@@ -467,5 +482,10 @@
 
     .wt-dialog-actions .wt-btn {
         width: 100%;
+    }
+
+    .wt-dialog-actions .wt-btn + .wt-btn {
+        margin-left: 0;
+        margin-bottom: 0.7em;
     }
 }
