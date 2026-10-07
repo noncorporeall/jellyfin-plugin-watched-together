@@ -7,6 +7,8 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.SyncPlay;
+using MediaBrowser.Controller.SyncPlay.Requests;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.WatchedTogether.Services;
@@ -22,6 +24,7 @@ namespace Jellyfin.Plugin.WatchedTogether.Services;
 /// <param name="Progress">For live watchers, how far through they are (0–1), when known.</param>
 /// <param name="IsPaused">For live watchers, whether playback is paused.</param>
 /// <param name="RuntimeSeconds">For live watchers, the item's length, so browsers can animate progress.</param>
+/// <param name="SyncPlayGroupId">For live watchers in a SyncPlay group, the group (so a watch party shows as one).</param>
 public sealed record Watcher(
     Guid UserId,
     string UserName,
@@ -32,7 +35,8 @@ public sealed record Watcher(
     bool IsLive = false,
     double? Progress = null,
     bool IsPaused = false,
-    double? RuntimeSeconds = null);
+    double? RuntimeSeconds = null,
+    Guid? SyncPlayGroupId = null);
 
 /// <summary>A card on the shelf and the people who watched it.</summary>
 /// <param name="ItemId">The item shown on the card (a movie, an episode, or a series when grouped).</param>
@@ -61,6 +65,7 @@ public class RecentActivityService
     private readonly ILibraryManager _libraryManager;
     private readonly IUserDataManager _userDataManager;
     private readonly ISessionManager _sessionManager;
+    private readonly ISyncPlayManager? _syncPlayManager;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -71,12 +76,14 @@ public class RecentActivityService
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         ISessionManager sessionManager,
+        ISyncPlayManager? syncPlayManager,
         ILogger logger)
     {
         _userManager = userManager;
         _libraryManager = libraryManager;
         _userDataManager = userDataManager;
         _sessionManager = sessionManager;
+        _syncPlayManager = syncPlayManager;
         _logger = logger;
     }
 
@@ -209,7 +216,11 @@ public class RecentActivityService
         return byCard
             .Select(kv => new ActivityEntry(
                 kv.Key,
-                kv.Value.OrderByDescending(w => w.IsLive).ThenByDescending(w => w.LastPlayed).ToList()))
+                kv.Value.OrderByDescending(w => w.IsLive)
+                    .ThenBy(w => w.SyncPlayGroupId.HasValue ? 0 : 1)
+                    .ThenBy(w => w.SyncPlayGroupId)
+                    .ThenByDescending(w => w.LastPlayed)
+                    .ToList()))
             .OrderByDescending(e => e.HasLive)
             .ThenByDescending(e => e.LastPlayed)
             .ToList();
@@ -259,6 +270,8 @@ public class RecentActivityService
                 progress = Math.Clamp((double)position.Value / item.RunTimeTicks.Value, 0, 1);
             }
 
+            Guid? groupId = FindSyncPlayGroup(session, user);
+
             result.Add((cardId, new Watcher(
                 user.Id,
                 user.Username,
@@ -269,10 +282,30 @@ public class RecentActivityService
                 IsLive: true,
                 Progress: progress,
                 IsPaused: session.PlayState?.IsPaused ?? false,
-                RuntimeSeconds: item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / (double)TimeSpan.TicksPerSecond : null)));
+                RuntimeSeconds: item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / (double)TimeSpan.TicksPerSecond : null,
+                SyncPlayGroupId: groupId)));
         }
 
         return result;
+    }
+
+    private Guid? FindSyncPlayGroup(SessionInfo session, User user)
+    {
+        if (_syncPlayManager == null || !_syncPlayManager.IsUserActive(user.Id))
+        {
+            return null;
+        }
+
+        try
+        {
+            return _syncPlayManager.ListGroups(session, new ListGroupsRequest())
+                .FirstOrDefault(g => g.Participants.Contains(user.Username, StringComparer.OrdinalIgnoreCase))?.GroupId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "[WatchedTogether] Could not look up SyncPlay group for {User}", user.Username);
+            return null;
+        }
     }
 
     private List<ActivityEntry> BuildSnapshot()

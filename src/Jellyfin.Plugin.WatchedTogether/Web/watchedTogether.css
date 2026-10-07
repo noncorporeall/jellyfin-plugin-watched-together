@@ -21,7 +21,7 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 .wt-avatar {
@@ -75,27 +75,6 @@
     box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.35), 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
-.wt-live-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35em;
-    margin-left: 0.4em;
-    padding: 0.2em 0.55em;
-    border-radius: 999px;
-    background: var(--wt-green);
-    color: #fff;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    font-size: 0.7em;
-    font-size: max(10px, calc(var(--wt-pct, 16) * 0.34cqw));
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-    white-space: nowrap;
-}
-
-.wt-live-pill.wt-paused {
-    background: #8a8f98;
-}
-
 .wt-live-dot {
     display: inline-block;
     width: 0.55em;
@@ -104,10 +83,6 @@
     background: #fff;
     flex: none;
     animation: wt-pulse 1.6s ease-in-out infinite;
-}
-
-.wt-paused .wt-live-dot {
-    animation: none;
 }
 
 .wt-caption-live .wt-live-dot {
@@ -134,6 +109,7 @@
     z-index: 3;
     background: rgba(0, 0, 0, 0.55);
     overflow: visible;
+    pointer-events: none;
 }
 
 .wt-live-progress-fill {
@@ -178,41 +154,6 @@
     50% { box-shadow: 0 0 0 2px var(--wt-green), 0 0 12px 4px rgba(29, 185, 84, 0.9); }
 }
 
-/* "Join" (ask to watch together) */
-.wt-join {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25em;
-    margin-left: 0.4em;
-    padding: 0.2em 0.6em 0.2em 0.45em;
-    border: 0;
-    border-radius: 999px;
-    background: rgba(15, 15, 15, 0.85);
-    color: #fff;
-    font: inherit;
-    font-weight: 600;
-    font-size: 0.7em;
-    font-size: max(10px, calc(var(--wt-pct, 16) * 0.34cqw));
-    cursor: pointer;
-    box-shadow: 0 0 0 1.5px var(--wt-green), 0 1px 4px rgba(0, 0, 0, 0.5);
-    white-space: nowrap;
-}
-
-.wt-join .material-icons {
-    font-size: 1.3em;
-}
-
-.wt-join:hover,
-.wt-join:focus-visible {
-    background: var(--wt-green);
-    outline: none;
-}
-
-.wt-join:disabled {
-    opacity: 0.6;
-    cursor: default;
-}
-
 /* Medals on the Most Popular shelves */
 .wt-medal {
     position: absolute;
@@ -222,7 +163,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    pointer-events: auto;
+    pointer-events: none;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
 }
 
@@ -337,99 +278,11 @@
     to { transform: rotate(360deg); }
 }
 
-/* Incoming invite */
-.wt-invite {
-    position: fixed;
-    right: 1.5em;
-    bottom: 1.5em;
-    z-index: 100001;
-    width: min(92vw, 24em);
-    padding: 1.1em 1.1em 0;
-    border-radius: 12px;
-    background: rgba(24, 24, 24, 0.97);
-    color: #fff;
-    box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.6), 0 10px 32px rgba(0, 0, 0, 0.6);
-    overflow: hidden;
-    animation: wt-pop 0.25s ease-out;
-}
-
-@keyframes wt-pop {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: none; opacity: 1; }
-}
-
-.wt-invite-head {
-    display: flex;
-    align-items: center;
-    gap: 0.8em;
-}
-
-.wt-invite .wt-invite-avatar {
-    width: 3em;
-    height: 3em;
-    margin: 0;
-    font-size: 1em;
-    border-color: #1db954;
-}
-
-.wt-invite-title {
-    font-size: 1.05em;
-}
-
-.wt-invite-item {
-    opacity: 0.75;
-    margin-top: 0.2em;
-}
-
-.wt-invite-note {
-    margin-top: 0.8em;
-    font-size: 0.85em;
-    opacity: 0.7;
-}
-
-.wt-invite-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.6em;
-    margin: 1em 0;
-}
-
-.wt-btn {
-    border: 0;
-    border-radius: 999px;
-    padding: 0.55em 1.1em;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.wt-btn-quiet {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-}
-
-.wt-btn-go {
-    background: #1db954;
-    color: #fff;
-}
-
-.wt-invite-timer {
-    height: 3px;
-    margin: 0 -1.1em;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.wt-invite-timer-fill {
-    width: 100%;
-    height: 100%;
-    background: #1db954;
-}
-
 @media (prefers-reduced-motion: reduce) {
     .wt-live-progress-fill,
     .wt-live-progress-head,
     .wt-spinner,
-    .wt-invite {
+    .wt-dialog {
         animation: none;
     }
 }
@@ -461,6 +314,158 @@
     text-overflow: ellipsis;
 }
 
-.wt-invite .wt-initials {
+/* A SyncPlay watch party: members' pictures sit together in one green capsule */
+.wt-party {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--wt-green, #1db954);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.wt-party .wt-avatar {
+    box-shadow: none;
+}
+
+.wt-party + .wt-avatar,
+.wt-avatar + .wt-party {
+    margin-left: calc(var(--wt-pct, 16) * 0.15cqw);
+}
+
+/* Dialogs: "watch together or on my own?" and incoming invites */
+.wt-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1em;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.wt-dialog {
+    width: min(94vw, 28em);
+    padding: 1.4em 1.4em 0;
+    border-radius: 14px;
+    background: #1c1c1c;
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.55), 0 14px 40px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    animation: wt-pop 0.2s ease-out;
+}
+
+@keyframes wt-pop {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+.wt-dialog-head {
+    display: flex;
+    align-items: center;
+    gap: 0.9em;
+}
+
+.wt-dialog-avatars {
+    display: flex;
+    flex: none;
+}
+
+.wt-dialog .wt-avatar {
+    width: 3em;
+    height: 3em;
+    margin-left: -0.8em;
+}
+
+.wt-dialog .wt-avatar:first-child {
+    margin-left: 0;
+}
+
+.wt-dialog .wt-initials {
     font-size: 1.1em;
+}
+
+.wt-dialog-title {
+    font-size: 1.1em;
+    line-height: 1.35;
+}
+
+.wt-dialog-subtitle {
+    margin-top: 0.25em;
+    opacity: 0.75;
+}
+
+.wt-dialog-note {
+    margin-top: 0.9em;
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+.wt-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.7em;
+    margin: 1.3em 0 1.4em;
+}
+
+.wt-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.7em 1.3em;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.wt-btn-quiet {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.wt-btn-go {
+    background: #1db954;
+    color: #fff;
+}
+
+/* Remote / gamepad users navigate by focus, so the focused button must be unmistakable */
+.wt-btn:focus,
+.wt-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(29, 185, 84, 0.6);
+    transform: scale(1.05);
+}
+
+.wt-dialog-timer {
+    height: 4px;
+    margin: 0 -1.4em;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.wt-dialog-timer-fill {
+    width: 100%;
+    height: 100%;
+    background: #1db954;
+}
+
+/* Bigger, easier targets on TV layouts */
+.layout-tv .wt-dialog {
+    font-size: 1.25em;
+    width: min(90vw, 34em);
+}
+
+.layout-tv .wt-btn {
+    padding: 0.8em 1.6em;
+}
+
+@media (max-width: 480px) {
+    .wt-dialog-actions {
+        flex-direction: column-reverse;
+    }
+
+    .wt-dialog-actions .wt-btn {
+        width: 100%;
+    }
 }

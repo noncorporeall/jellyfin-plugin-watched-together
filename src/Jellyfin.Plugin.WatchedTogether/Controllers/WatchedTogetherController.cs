@@ -5,6 +5,7 @@ using Jellyfin.Plugin.WatchedTogether.Configuration;
 using Jellyfin.Plugin.WatchedTogether.Services;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.SyncPlay;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,10 +31,11 @@ public class WatchedTogetherController : ControllerBase
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         ISessionManager sessionManager,
+        ISyncPlayManager syncPlayManager,
         ILogger<WatchedTogetherController> logger)
     {
         _userManager = userManager;
-        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, logger);
+        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, syncPlayManager, logger);
     }
 
     /// <summary>
@@ -69,7 +71,8 @@ public class WatchedTogetherController : ControllerBase
                 IsLive = w.IsLive,
                 Progress = w.Progress,
                 IsPaused = w.IsPaused,
-                RuntimeSeconds = w.RuntimeSeconds
+                RuntimeSeconds = w.RuntimeSeconds,
+                SyncPlayGroupId = w.SyncPlayGroupId?.ToString("N")
             }).ToList();
         }
 
@@ -186,4 +189,7 @@ public class WatcherDto
 
     /// <summary>Gets or sets the item's length in seconds when live (for animating progress).</summary>
     public double? RuntimeSeconds { get; set; }
+
+    /// <summary>Gets or sets the SyncPlay group they're watching in, if any (members of one party share it).</summary>
+    public string? SyncPlayGroupId { get; set; }
 }

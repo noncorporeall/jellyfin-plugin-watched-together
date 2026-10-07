@@ -3,7 +3,8 @@
  * Injected into jellyfin-web by File Transformation. It:
  *  - decorates the "recently watched" shelf with watchers' profile pictures, LIVE badges and progress,
  *  - refreshes that shelf in place when someone starts watching something new,
- *  - offers "Join" on live cards and shows incoming "watch together" invites (SyncPlay),
+ *  - when someone clicks a card another person is watching live, offers "watch together"
+ *    (a SyncPlay invite) or "watch on my own", and shows incoming invites,
  *  - puts gold / silver / bronze / rank badges on the Most Popular shelves.
  */
 (function () {
@@ -33,7 +34,10 @@
         popularAt: 0,
         popularPending: null,
         incomingShown: {},
-        incomingDelayMs: 5000
+        incomingDelayMs: 5000,
+        lookup: {},
+        settings: null,
+        dialogOpen: false
     };
 
     // ---------- helpers ----------
@@ -260,6 +264,7 @@
             if (pick(w, 'IsLive')) {
                 var pct = percent(pick(w, 'Progress'));
                 line += pick(w, 'IsPaused') ? ' (paused' : ' (watching now';
+                if (pick(w, 'SyncPlayGroupId')) { line += ' together'; }
                 return line + (pct ? ', ' + pct + ')' : ')');
             }
             line += pick(w, 'Finished') ? ' (finished' : ' (watched';
@@ -273,18 +278,35 @@
         if (live.length === 0) {
             return { live: false, text: joinNames(watchers.map(function (w) { return pick(w, 'Name'); })) };
         }
+        var lead = live[0];
+        var pct = percent(pick(lead, 'Progress'));
         if (live.length === 1) {
-            var w = live[0];
-            var pct = percent(pick(w, 'Progress'));
-            var verb = pick(w, 'IsPaused') ? ' paused' : ' is watching';
-            return { live: true, text: pick(w, 'Name') + verb + (pct ? ' · ' + pct : '') };
+            var verb = pick(lead, 'IsPaused') ? ' paused' : ' is watching';
+            return { live: true, text: pick(lead, 'Name') + verb + (pct ? ' · ' + pct : '') };
         }
-        return { live: true, text: joinNames(live.map(function (x) { return pick(x, 'Name'); })) + ' are watching' };
+        var party = partyOf(live);
+        var names = joinNames(live.map(function (x) { return pick(x, 'Name'); }));
+        return { live: true, text: names + (party ? ' are watching together' : ' are watching') + (party && pct ? ' · ' + pct : '') };
+    }
+
+    /** The SyncPlay group shared by all of these live watchers, if there is one. */
+    function partyOf(live) {
+        var first = live.length > 1 ? pick(live[0], 'SyncPlayGroupId') : null;
+        if (!first) { return null; }
+        return live.every(function (w) { return pick(w, 'SyncPlayGroupId') === first; }) ? first : null;
     }
 
     function buildAvatarsHtml(watchers, max) {
         var html = '';
+        var openParty = null;
         watchers.slice(0, max).forEach(function (w, index) {
+            var group = pick(w, 'IsLive') ? pick(w, 'SyncPlayGroupId') : null;
+            var groupSize = group ? watchers.filter(function (x) { return pick(x, 'SyncPlayGroupId') === group; }).length : 0;
+            if (openParty && openParty !== group) { html += '</span>'; openParty = null; }
+            if (group && groupSize > 1 && openParty !== group) {
+                html += '<span class="wt-party" title="Watching together (SyncPlay)">';
+                openParty = group;
+            }
             html += avatarHtml(
                 pick(w, 'UserId'),
                 pick(w, 'Name'),
@@ -292,6 +314,7 @@
                 pick(w, 'IsLive') ? ' wt-avatar-live' : '',
                 'z-index:' + (max - index + 1) + ';');
         });
+        if (openParty) { html += '</span>'; }
         if (watchers.length > max) {
             html += '<span class="wt-avatar wt-more"><span class="wt-initials">+' + (watchers.length - max) + '</span></span>';
         }
@@ -358,35 +381,14 @@
         host.classList.add('wt-host');
         host.style.setProperty('--wt-pct', String(settings.sizePct));
 
-        if (settings.showAvatars || firstLive) {
+        if (settings.showAvatars) {
             var wrap = document.createElement('div');
             wrap.className = 'wt-avatars';
             wrap.setAttribute('title', tooltip);
             wrap.setAttribute('aria-label', (firstLive ? 'Watching now: ' : 'Watched by ') + names.join(', '));
-            var html = settings.showAvatars ? buildAvatarsHtml(watchers, settings.maxAvatars) : '';
-            if (firstLive) {
-                var paused = !!pick(firstLive, 'IsPaused');
-                html += '<span class="wt-live-pill' + (paused ? ' wt-paused' : '') + '">' +
-                    '<span class="wt-live-dot"></span>' + (paused ? 'PAUSED' : 'LIVE') + '</span>';
-
-                if (settings.watchTogether && normaliseId(pick(firstLive, 'UserId')) !== settings.viewerId) {
-                    html += '<button type="button" class="wt-join" title="Ask ' + escapeHtml(pick(firstLive, 'Name')) + ' to watch together">' +
-                        '<span class="material-icons" aria-hidden="true">group_add</span><span class="wt-join-text">Join</span></button>';
-                }
-            }
-            wrap.innerHTML = html;
+            wrap.innerHTML = settings.showAvatars ? buildAvatarsHtml(watchers, settings.maxAvatars) : '';
             host.appendChild(wrap);
             wireImageFallbacks(wrap);
-
-            var joinBtn = wrap.querySelector('.wt-join');
-            if (joinBtn) {
-                var target = { id: pick(firstLive, 'UserId'), name: pick(firstLive, 'Name') };
-                joinBtn.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    askToWatchTogether(target, joinBtn);
-                });
-            }
         }
 
         updateProgressBar(host, firstLive, settings);
@@ -437,6 +439,8 @@
             if (!response) { return; }
             var lookup = lookupFrom(response);
             var settings = settingsFrom(response);
+            state.lookup = lookup;
+            state.settings = settings;
             cards.forEach(function (card) {
                 if (!card.isConnected) { return; }
                 decorateCard(card, lookup[normaliseId(card.getAttribute('data-id'))], settings);
@@ -478,10 +482,218 @@
         });
     }
 
+    // ---------- dialogs (mouse, touch, keyboard, TV remote and gamepad) ----------
+
+    var BACK_KEYS = { Escape: 1, Back: 1, GoBack: 1, BrowserBack: 1, GamepadB: 1 };
+    var BACK_CODES = { 27: 1, 461: 1, 10009: 1, 166: 1 };   // Esc, webOS Back, Tizen Return, BrowserBack
+    var PREV_KEYS = { ArrowLeft: 1, ArrowUp: 1, GamepadDPadLeft: 1, GamepadDPadUp: 1, GamepadLeftThumbstickLeft: 1, GamepadLeftThumbstickUp: 1 };
+    var NEXT_KEYS = { ArrowRight: 1, ArrowDown: 1, GamepadDPadRight: 1, GamepadDPadDown: 1, GamepadLeftThumbstickRight: 1, GamepadLeftThumbstickDown: 1 };
+    var SELECT_KEYS = { GamepadA: 1 };
+
+    /**
+     * A small modal that works everywhere Jellyfin's web client runs. Buttons are real
+     * <button>s, focus starts on a safe default and is kept inside the dialog; arrows / D-pad
+     * move between buttons, OK / Enter / A activates, Back / Esc / B cancels. Keys are
+     * handled first and marked as handled, so Jellyfin's own navigation and the video
+     * player's shortcuts ignore them while the dialog is open.
+     */
+    function openDialog(opts) {
+        if (state.dialogOpen) { return null; }
+        state.dialogOpen = true;
+
+        var previousFocus = document.activeElement;
+        var backdrop = document.createElement('div');
+        backdrop.className = 'wt-dialog-backdrop';
+        var panel = document.createElement('div');
+        panel.className = 'wt-dialog';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-label', opts.label || 'Watch together');
+        panel.innerHTML =
+            '<div class="wt-dialog-head">' + (opts.avatarsHtml ? '<div class="wt-dialog-avatars">' + opts.avatarsHtml + '</div>' : '') +
+            '<div class="wt-dialog-text"><div class="wt-dialog-title">' + opts.titleHtml + '</div>' +
+            (opts.subtitle ? '<div class="wt-dialog-subtitle">' + escapeHtml(opts.subtitle) + '</div>' : '') + '</div></div>' +
+            (opts.note ? '<div class="wt-dialog-note">' + escapeHtml(opts.note) + '</div>' : '') +
+            '<div class="wt-dialog-actions"></div>' +
+            (opts.timeoutSeconds ? '<div class="wt-dialog-timer"><div class="wt-dialog-timer-fill"></div></div>' : '');
+        backdrop.appendChild(panel);
+        document.body.appendChild(backdrop);
+        wireImageFallbacks(panel);
+
+        var actions = panel.querySelector('.wt-dialog-actions');
+        var buttons = opts.buttons.map(function (b) {
+            var el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'wt-btn ' + (b.primary ? 'wt-btn-go' : 'wt-btn-quiet');
+            el.textContent = b.label;
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+                if (b.onClick) { b.onClick(); }
+            });
+            actions.appendChild(el);
+            return el;
+        });
+
+        var expiry = null;
+        if (opts.timeoutSeconds) {
+            var fill = panel.querySelector('.wt-dialog-timer-fill');
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    fill.style.transition = 'width ' + opts.timeoutSeconds + 's linear';
+                    fill.style.width = '0%';
+                });
+            });
+            expiry = setTimeout(cancel, opts.timeoutSeconds * 1000);
+        }
+
+        function focusIndex(i) {
+            var n = buttons.length;
+            buttons[((i % n) + n) % n].focus();
+        }
+
+        function currentIndex() {
+            return buttons.indexOf(document.activeElement);
+        }
+
+        function onKey(e) {
+            var key = e.key;
+            var handled = true;
+            if (BACK_KEYS[key] || BACK_CODES[e.keyCode]) {
+                cancel();
+            } else if (PREV_KEYS[key]) {
+                focusIndex(currentIndex() < 0 ? 0 : currentIndex() - 1);
+            } else if (NEXT_KEYS[key]) {
+                focusIndex(currentIndex() < 0 ? 0 : currentIndex() + 1);
+            } else if (key === 'Tab') {
+                focusIndex((currentIndex() < 0 ? 0 : currentIndex()) + (e.shiftKey ? -1 : 1));
+            } else if (SELECT_KEYS[key]) {
+                var i = currentIndex();
+                (i < 0 ? buttons[opts.defaultIndex || 0] : buttons[i]).click();
+            } else if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+                handled = false; // let the focused button activate natively
+                if (currentIndex() < 0) { buttons[opts.defaultIndex || 0].click(); handled = true; }
+            }
+            // Keep every key away from Jellyfin's navigation / the player while we're open.
+            if (handled) { e.preventDefault(); }
+            e.stopPropagation();
+        }
+
+        function onFocusIn(e) {
+            if (!panel.contains(e.target)) { focusIndex(opts.defaultIndex || 0); }
+        }
+
+        function close() {
+            if (!state.dialogOpen) { return; }
+            state.dialogOpen = false;
+            clearTimeout(expiry);
+            window.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('focusin', onFocusIn, true);
+            if (backdrop.parentNode) { backdrop.parentNode.removeChild(backdrop); }
+            if (previousFocus && previousFocus.focus && previousFocus.isConnected) {
+                try { previousFocus.focus(); } catch (err) { /* ignore */ }
+            }
+        }
+
+        function cancel() {
+            close();
+            if (opts.onCancel) { opts.onCancel(); }
+        }
+
+        backdrop.addEventListener('click', function (e) {
+            if (e.target === backdrop) { cancel(); }
+        });
+        window.addEventListener('keydown', onKey, true);
+        document.addEventListener('focusin', onFocusIn, true);
+        setTimeout(function () { focusIndex(opts.defaultIndex || 0); }, 0);
+
+        return { close: close };
+    }
+
+    // ---------- clicking a card someone is watching live ----------
+
+    function liveOthersOn(card) {
+        var settings = state.settings;
+        if (!settings || !settings.watchTogether) { return []; }
+        var watchers = state.lookup[normaliseId(card.getAttribute('data-id'))] || [];
+        return watchers.filter(function (w) {
+            return pick(w, 'IsLive') && normaliseId(pick(w, 'UserId')) !== settings.viewerId;
+        });
+    }
+
+    /**
+     * Capture-phase click handler: runs before Jellyfin's own card handler. A remote's OK or a
+     * gamepad's A button becomes a click on the focused card, so this covers every input.
+     */
+    function onCardActivate(e) {
+        var target = e.target;
+        if (!target || !target.closest || state.dialogOpen) { return; }
+
+        var card = target.closest('.card[data-id]');
+        if (!card || !card.closest(sectionSelector(state.sectionId))) { return; }
+
+        if (card._wtBypass) {
+            card._wtBypass = false;
+            return;
+        }
+
+        // Leave the "more" menu and similar secondary actions alone.
+        var actionEl = target.closest('[data-action]');
+        var action = actionEl ? actionEl.getAttribute('data-action') : '';
+        if (/^(menu|multiselect|none|playmenu|addtoplaylist|edit)$/.test(action)) { return; }
+
+        var live = liveOthersOn(card);
+        if (live.length === 0) { return; }
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) { e.stopImmediatePropagation(); }
+
+        showWatchChoice(card, actionEl || card, live);
+    }
+
+    function continueOnMyOwn(card, actionEl) {
+        card._wtBypass = true;
+        try {
+            actionEl.click();
+        } finally {
+            setTimeout(function () { card._wtBypass = false; }, 500);
+        }
+    }
+
+    function showWatchChoice(card, actionEl, live) {
+        var lead = live[0];
+        var party = partyOf(live);
+        var names = joinNames(live.map(function (w) { return pick(w, 'Name'); }));
+        var detail = pick(lead, 'Detail');
+        var pct = percent(pick(lead, 'Progress'));
+        var title = card.querySelector('.cardText-first') ? card.querySelector('.cardText-first').textContent.trim() : '';
+
+        var subtitle = [title, detail, pct ? pct + ' in' : null].filter(Boolean).join(' · ');
+        var avatars = live.slice(0, 4).map(function (w) {
+            return avatarHtml(pick(w, 'UserId'), pick(w, 'Name'), pick(w, 'ImageTag'), ' wt-avatar-live', '');
+        }).join('');
+
+        openDialog({
+            label: names + ' watching now',
+            avatarsHtml: avatars,
+            titleHtml: '<b>' + escapeHtml(names) + '</b> ' + (live.length > 1 ? (party ? 'are watching this together' : 'are watching this') : (pick(lead, 'IsPaused') ? 'paused this' : 'is watching this')) + ' right now',
+            subtitle: subtitle,
+            note: party
+                ? 'Join their SyncPlay group to watch in sync with them.'
+                : 'Ask to start SyncPlay from where ' + pick(lead, 'Name') + ' is, or start it yourself.',
+            defaultIndex: 0,
+            buttons: [
+                { label: party ? 'Join their watch party' : 'Ask to watch together', primary: true, onClick: function () { askToWatchTogether({ id: pick(lead, 'UserId'), name: party ? names : pick(lead, 'Name') }); } },
+                { label: 'Watch on my own', onClick: function () { continueOnMyOwn(card, actionEl); } }
+            ]
+        });
+    }
+
     // ---------- watch together (SyncPlay invites) ----------
 
-    function askToWatchTogether(target, button) {
-        if (button) { button.disabled = true; }
+    function askToWatchTogether(target) {
         postJson('WatchedTogether/Invites', { UserId: target.id }).then(function (result) {
             var outcome = pick(result, 'Outcome');
             if (outcome === 'Joined') {
@@ -492,31 +704,22 @@
                 toast(escapeHtml(pick(result, 'Message') || 'Couldn\'t send the invite.'));
                 return;
             }
-            var invite = pick(result, 'Invite');
-            waitForAnswer(pick(invite, 'Id'), target);
+            waitForAnswer(pick(pick(result, 'Invite'), 'Id'), target);
         }, function () {
             toast('Couldn\'t send the invite.');
-        }).then(function () {
-            if (button) { setTimeout(function () { button.disabled = false; }, 3000); }
         });
     }
 
     function waitForAnswer(inviteId, target) {
-        var cancelled = false;
         var started = Date.now();
-        toast('<span class="wt-spinner"></span>Asking <b>' + escapeHtml(target.name) + '</b> to watch together…', {
-            sticky: true,
-            action: 'Cancel',
-            onAction: function () { cancelled = true; }
-        });
+        toast('<span class="wt-spinner"></span>Asking <b>' + escapeHtml(target.name) + '</b> to watch together…', { sticky: true });
 
         function poll() {
-            if (cancelled) { return; }
             var client = apiClient();
             client.getJSON(client.getUrl('WatchedTogether/Invites/' + inviteId)).then(function (invite) {
                 var status = pick(invite, 'Status');
                 if (status === 'Pending') {
-                    if (Date.now() - started < 100000) { setTimeout(poll, 2000); }
+                    if (Date.now() - started < 100000) { setTimeout(poll, 2000); } else { hideToast(); }
                     return;
                 }
                 if (status === 'Accepted') {
@@ -545,56 +748,37 @@
 
     function showInvite(invite) {
         var id = pick(invite, 'Id');
-        if (state.incomingShown[id] || document.querySelector('.wt-invite')) { return; }
+        if (state.incomingShown[id] || state.dialogOpen) { return; }
         state.incomingShown[id] = true;
 
         var from = pick(invite, 'FromName');
-        var panel = document.createElement('div');
-        panel.className = 'wt-invite';
-        panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-label', from + ' wants to watch together');
-        panel.innerHTML =
-            '<div class="wt-invite-head">' +
-            avatarHtml(pick(invite, 'FromUserId'), from, pick(invite, 'FromImageTag'), ' wt-invite-avatar', '') +
-            '<div class="wt-invite-text"><div class="wt-invite-title"><b>' + escapeHtml(from) + '</b> wants to watch with you</div>' +
-            '<div class="wt-invite-item">' + escapeHtml(pick(invite, 'ItemName')) + '</div></div></div>' +
-            '<div class="wt-invite-note">Starts SyncPlay from where you are now. Pausing and seeking will happen for both of you.</div>' +
-            '<div class="wt-invite-actions"><button type="button" class="wt-btn wt-btn-quiet" data-answer="no">Not now</button>' +
-            '<button type="button" class="wt-btn wt-btn-go" data-answer="yes">Watch together</button></div>' +
-            '<div class="wt-invite-timer"><div class="wt-invite-timer-fill"></div></div>';
-        document.body.appendChild(panel);
-        wireImageFallbacks(panel);
-
-        var seconds = Math.max(5, pick(invite, 'SecondsLeft') || 60);
-        var timerFill = panel.querySelector('.wt-invite-timer-fill');
-        requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-                timerFill.style.transition = 'width ' + seconds + 's linear';
-                timerFill.style.width = '0%';
+        function answer(accept) {
+            postJson('WatchedTogether/Invites/' + id + '/Respond', { Accept: accept }).then(function (result) {
+                if (!accept) { return; }
+                if (pick(result, 'Status') === 'Accepted') {
+                    toast('Watching together with <b>' + escapeHtml(from) + '</b> — SyncPlay is on.');
+                } else {
+                    toast(escapeHtml(pick(result, 'Message') || 'Couldn\'t start watching together.'));
+                }
+            }, function () {
+                toast('Couldn\'t answer the invite.');
             });
-        });
-        var expiry = setTimeout(close, seconds * 1000);
-
-        function close() {
-            clearTimeout(expiry);
-            if (panel.parentNode) { panel.parentNode.removeChild(panel); }
         }
 
-        Array.prototype.forEach.call(panel.querySelectorAll('[data-answer]'), function (btn) {
-            btn.addEventListener('click', function () {
-                var accept = btn.getAttribute('data-answer') === 'yes';
-                close();
-                postJson('WatchedTogether/Invites/' + id + '/Respond', { Accept: accept }).then(function (result) {
-                    if (!accept) { return; }
-                    if (pick(result, 'Status') === 'Accepted') {
-                        toast('Watching together with <b>' + escapeHtml(from) + '</b> — SyncPlay is on.');
-                    } else {
-                        toast(escapeHtml(pick(result, 'Message') || 'Couldn\'t start watching together.'));
-                    }
-                }, function () {
-                    toast('Couldn\'t answer the invite.');
-                });
-            });
+        // "Not now" has focus by default, so a stray OK press on a remote never accepts by accident.
+        openDialog({
+            label: from + ' wants to watch together',
+            avatarsHtml: avatarHtml(pick(invite, 'FromUserId'), from, pick(invite, 'FromImageTag'), '', ''),
+            titleHtml: '<b>' + escapeHtml(from) + '</b> wants to watch with you',
+            subtitle: pick(invite, 'ItemName'),
+            note: 'Starts SyncPlay from where you are now. Pausing and seeking will happen for both of you.',
+            timeoutSeconds: Math.max(5, pick(invite, 'SecondsLeft') || 60),
+            defaultIndex: 0,
+            buttons: [
+                { label: 'Not now', onClick: function () { answer(false); } },
+                { label: 'Watch together', primary: true, onClick: function () { answer(true); } }
+            ],
+            onCancel: function () { answer(false); }
         });
     }
 
@@ -750,6 +934,8 @@
                 }
             }).observe(document.body, { childList: true, subtree: true });
         }
+
+        document.addEventListener('click', onCardActivate, true);
 
         schedule();
         setTimeout(liveTick, 15000);

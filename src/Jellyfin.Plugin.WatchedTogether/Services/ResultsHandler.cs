@@ -4,6 +4,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
@@ -43,12 +44,13 @@ public class ResultsHandler
         IUserDataManager userDataManager,
         IDtoService dtoService,
         ISessionManager sessionManager,
+        ISyncPlayManager syncPlayManager,
         IApplicationPaths appPaths,
         ILogger<ResultsHandler> logger)
     {
         _userManager = userManager;
         _dtoService = dtoService;
-        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, logger);
+        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, syncPlayManager, logger);
         _popularity = new PopularityService(libraryManager, appPaths, logger);
     }
 
