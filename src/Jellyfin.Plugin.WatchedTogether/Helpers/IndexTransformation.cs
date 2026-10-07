@@ -44,6 +44,15 @@ public static class IndexTransformation
         }
     }
 
+    /// <summary>True for jellyfin-web's index.html (a document with a head and body), false for scripts.</summary>
+    private static bool LooksLikeHtmlPage(string contents)
+    {
+        string start = contents.Length > 512 ? contents.Substring(0, 512) : contents;
+        return start.TrimStart().StartsWith("<", StringComparison.Ordinal)
+            && contents.Contains("</head>", StringComparison.OrdinalIgnoreCase)
+            && contents.Contains("</body>", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// File Transformation callback. Must stay public, static, and take a single payload parameter.
     /// </summary>
@@ -53,6 +62,14 @@ public static class IndexTransformation
     {
         string contents = payload.Contents ?? string.Empty;
         if (contents.Contains(Marker, StringComparison.Ordinal))
+        {
+            return contents;
+        }
+
+        // File Transformation matches "index.html" as a regex, so it also hands us JavaScript chunks
+        // whose names contain "index-html" (e.g. session-login-index-html.*.chunk.js). Only ever
+        // touch the real HTML page; anything else goes back byte-for-byte unchanged.
+        if (!LooksLikeHtmlPage(contents))
         {
             return contents;
         }

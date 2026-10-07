@@ -5,9 +5,10 @@
   web client, so server plugins (Home Screen Sections, Watched Together…) appear on the TV.
   It has its own app id, so it installs alongside any other Jellyfin build.
 -->
-<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="http://jellyfin.org/JellyfinHosted" version="1.0.0" viewmodes="fullscreen">
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="http://jellyfin.org/JellyfinHosted" version="1.0.1" viewmodes="fullscreen">
     <access origin="*" subdomains="true"></access>
     <tizen:allow-navigation>*</tizen:allow-navigation>
+    <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; object-src *; frame-src *; connect-src * ws: wss:;</tizen:content-security-policy>
     <tizen:application id="WtJfHost01.JellyfinHosted" package="WtJfHost01" required_version="2.3"/>
     <content src="index.html"/>
     <description>Jellyfin for Samsung Smart TV, using your server's own web client (with its plugins).</description>

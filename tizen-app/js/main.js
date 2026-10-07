@@ -64,15 +64,21 @@
     function readScreenInfo(done) {
         try {
             tizen.systeminfo.getPropertyValue('DISPLAY', function (result) {
-                var ratio = 1;
+                // The UI runs at 1920x1080 even on 4K/8K panels; the panel's real size comes from
+                // Samsung's productinfo API. If that can't be read, report nothing rather than
+                // 1080p, so Jellyfin doesn't needlessly cap or transcode 4K video.
+                var ratio = 0;
                 try {
                     if (webapis.productinfo.is8KPanelSupported && webapis.productinfo.is8KPanelSupported()) { ratio = 4; }
                     else if (webapis.productinfo.isUdPanelSupported && webapis.productinfo.isUdPanelSupported()) { ratio = 2; }
-                } catch (e) { /* ignore */ }
-                state.screenInfo = {
+                    else if (webapis.productinfo.isUdPanelSupported) { ratio = 1; }
+                } catch (e) {
+                    ratio = 0;
+                }
+                state.screenInfo = ratio ? {
                     width: Math.floor(result.resolutionWidth * ratio),
                     height: Math.floor(result.resolutionHeight * ratio)
-                };
+                } : { width: 0, height: 0 };
                 done();
             }, function () { done(); });
         } catch (e) {
