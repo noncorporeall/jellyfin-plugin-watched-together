@@ -2,6 +2,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
@@ -39,11 +40,12 @@ public class ResultsHandler
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         IDtoService dtoService,
+        ISessionManager sessionManager,
         ILogger<ResultsHandler> logger)
     {
         _userManager = userManager;
         _dtoService = dtoService;
-        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, logger);
+        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, logger);
     }
 
     /// <summary>

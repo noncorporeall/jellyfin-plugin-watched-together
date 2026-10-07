@@ -1,9 +1,22 @@
-/* Watched Together — avatar badges on the home screen shelf */
+/* Watched Together — avatar badges and LIVE indicators on the home screen shelf.
+ *
+ * Sizes use container query units (cqw = 1% of the card's width), so badges keep the
+ * same proportion on phones, laptops and 4K TVs. --wt-pct (set per card from the
+ * "Profile picture size" setting) is the avatar diameter as a % of card width.
+ * Older browsers without cqw fall back to the em sizes declared first.
+ */
+
+.wt-host {
+    container-type: inline-size;
+    --wt-green: #1db954;
+}
 
 .wt-avatars {
     position: absolute;
     top: 0.45em;
+    top: calc(var(--wt-pct, 16) * 0.2cqw);
     left: 0.45em;
+    left: calc(var(--wt-pct, 16) * 0.2cqw);
     z-index: 3;
     display: flex;
     flex-direction: row;
@@ -16,18 +29,24 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     width: 1.9em;
     height: 1.9em;
+    width: calc(var(--wt-pct, 16) * 1cqw);
+    height: calc(var(--wt-pct, 16) * 1cqw);
+    min-width: 18px;
+    min-height: 18px;
     margin-left: -0.55em;
+    margin-left: calc(var(--wt-pct, 16) * -0.3cqw);
     border-radius: 50%;
     border: 2px solid rgba(0, 0, 0, 0.75);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
     overflow: hidden;
     color: #fff;
-    font-size: 0.8em;
     font-weight: 600;
     line-height: 1;
     user-select: none;
+    box-sizing: border-box;
 }
 
 .wt-avatar:first-child {
@@ -41,9 +60,83 @@
     display: block;
 }
 
+.wt-initials {
+    font-size: 0.8em;
+    font-size: calc(var(--wt-pct, 16) * 0.42cqw);
+}
+
 .wt-avatar.wt-more {
     background-color: rgba(20, 20, 20, 0.85);
-    font-size: 0.72em;
+}
+
+/* Someone is watching this right now */
+.wt-avatar-live {
+    border-color: var(--wt-green);
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.35), 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.wt-live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-left: 0.4em;
+    padding: 0.2em 0.55em;
+    border-radius: 999px;
+    background: var(--wt-green);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    font-size: 0.7em;
+    font-size: max(10px, calc(var(--wt-pct, 16) * 0.34cqw));
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+
+.wt-live-pill.wt-paused {
+    background: #8a8f98;
+}
+
+.wt-live-dot {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: #fff;
+    flex: none;
+    animation: wt-pulse 1.6s ease-in-out infinite;
+}
+
+.wt-paused .wt-live-dot {
+    animation: none;
+}
+
+.wt-caption-live .wt-live-dot {
+    background: var(--wt-green, #1db954);
+}
+
+@keyframes wt-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wt-live-dot { animation: none; }
+}
+
+/* The live watcher's position, along the top edge of the artwork */
+.wt-live-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    z-index: 3;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.wt-live-progress-fill {
+    height: 100%;
+    background: var(--wt-green);
 }
 
 .wt-caption {
@@ -58,6 +151,12 @@
     text-overflow: ellipsis;
 }
 
+.wt-caption-live {
+    opacity: 1;
+    color: #1db954;
+    font-weight: 600;
+}
+
 .wt-caption-icon {
     font-size: 1em !important;
 }
@@ -65,10 +164,4 @@
 .wt-caption-text {
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-/* Bigger badges on TV-style layouts */
-.layout-tv .wt-avatar {
-    width: 2.3em;
-    height: 2.3em;
 }

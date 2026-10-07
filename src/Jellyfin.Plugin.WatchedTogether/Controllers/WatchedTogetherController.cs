@@ -4,6 +4,7 @@ using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.WatchedTogether.Configuration;
 using Jellyfin.Plugin.WatchedTogether.Services;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -28,10 +29,11 @@ public class WatchedTogetherController : ControllerBase
         IUserManager userManager,
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
+        ISessionManager sessionManager,
         ILogger<WatchedTogetherController> logger)
     {
         _userManager = userManager;
-        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, logger);
+        _activity = new RecentActivityService(userManager, libraryManager, userDataManager, sessionManager, logger);
     }
 
     /// <summary>
@@ -63,7 +65,10 @@ public class WatchedTogetherController : ControllerBase
                 ImageTag = w.ImageTag,
                 LastPlayed = DateTime.SpecifyKind(w.LastPlayed, DateTimeKind.Utc),
                 Finished = w.Finished,
-                Detail = w.Detail
+                Detail = w.Detail,
+                IsLive = w.IsLive,
+                Progress = w.Progress,
+                IsPaused = w.IsPaused
             }).ToList();
         }
 
@@ -73,6 +78,8 @@ public class WatchedTogetherController : ControllerBase
             ShowAvatars = config.ShowAvatars,
             ShowNamesCaption = config.ShowNamesCaption,
             MaxAvatarsPerCard = Math.Clamp(config.MaxAvatarsPerCard, 1, 8),
+            AvatarSizePercent = Math.Clamp(config.AvatarSizePercent, 5, 40),
+            LiveRefreshSeconds = config.ShowLiveSessions ? 15 : 0,
             Items = items
         };
     }
@@ -128,6 +135,12 @@ public class WatchersResponse
     /// <summary>Gets or sets the avatar cap per card.</summary>
     public int MaxAvatarsPerCard { get; set; }
 
+    /// <summary>Gets or sets the avatar diameter as a percentage of the card's width.</summary>
+    public int AvatarSizePercent { get; set; }
+
+    /// <summary>Gets or sets how often the browser re-checks live sessions (0 = off).</summary>
+    public int LiveRefreshSeconds { get; set; }
+
     /// <summary>Gets or sets item id (no dashes) → watchers, newest first.</summary>
     public Dictionary<string, List<WatcherDto>> Items { get; set; } = new();
 }
@@ -152,4 +165,13 @@ public class WatcherDto
 
     /// <summary>Gets or sets extra context, e.g. "S2:E5".</summary>
     public string? Detail { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether they are watching it right now.</summary>
+    public bool IsLive { get; set; }
+
+    /// <summary>Gets or sets how far through they are (0–1) when live.</summary>
+    public double? Progress { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether their live playback is paused.</summary>
+    public bool IsPaused { get; set; }
 }

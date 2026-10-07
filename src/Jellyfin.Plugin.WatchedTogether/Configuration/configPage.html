@@ -59,6 +59,14 @@
                     <label><input is="emby-checkbox" type="checkbox" id="ShowNamesCaption" /><span>Show a "watched by" caption under each card</span></label>
                 </div>
                 <div class="inputContainer">
+                    <input is="emby-input" type="number" id="AvatarSizePercent" min="5" max="40" label="Profile picture size (% of card width)" />
+                    <div class="fieldDescription">Pictures scale with the card, so they stay in proportion on phones, laptops and TVs. 16 is the default; try 22–28 for bigger faces.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="ShowLiveSessions" /><span>Show who is watching right now first, with a LIVE badge and their progress</span></label>
+                    <div class="fieldDescription">Updates every 15 seconds while the home screen is open.</div>
+                </div>
+                <div class="inputContainer">
                     <input is="emby-input" type="number" id="MaxAvatarsPerCard" min="1" max="8" label="Profile pictures per card before showing +N" />
                 </div>
 
@@ -93,9 +101,9 @@
             var pluginId = 'd73b0b70-2b96-4358-861f-78d5edb72753';
             var page = document.querySelector('#watchedTogetherConfigPage');
             var textFields = ['SectionTitle'];
-            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'ItemsScannedPerUser', 'CacheSeconds'];
+            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'AvatarSizePercent', 'ItemsScannedPerUser', 'CacheSeconds'];
             var boolFields = ['IncludeMovies', 'IncludeEpisodes', 'IncludeMusicVideos', 'IncludeInProgress',
-                'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption'];
+                'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption', 'ShowLiveSessions'];
 
             function escapeHtml(v) {
                 return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {

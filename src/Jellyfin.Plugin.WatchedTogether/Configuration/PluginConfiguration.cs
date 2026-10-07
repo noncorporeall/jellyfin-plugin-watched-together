@@ -43,6 +43,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets a value indicating whether a "Watched by Alice" caption is added under each card.</summary>
     public bool ShowNamesCaption { get; set; } = true;
 
+    /// <summary>Gets or sets the avatar diameter as a percentage of the card's width (scales with screen size).</summary>
+    public int AvatarSizePercent { get; set; } = 16;
+
+    /// <summary>Gets or sets a value indicating whether people watching right now are shown first, with a LIVE badge.</summary>
+    public bool ShowLiveSessions { get; set; } = true;
+
     /// <summary>Gets or sets the maximum avatars drawn per card before collapsing into "+N".</summary>
     public int MaxAvatarsPerCard { get; set; } = 3;
 

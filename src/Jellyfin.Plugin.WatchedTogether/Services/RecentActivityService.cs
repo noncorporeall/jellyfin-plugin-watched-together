@@ -6,31 +6,48 @@ using Jellyfin.Plugin.WatchedTogether.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.WatchedTogether.Services;
 
-/// <summary>One person's recent watch of a shelf item.</summary>
+/// <summary>One person's recent (or current) watch of a shelf item.</summary>
 /// <param name="UserId">The watcher.</param>
 /// <param name="UserName">The watcher's display name.</param>
 /// <param name="ImageTag">Cache tag for their profile picture, or null when they have none.</param>
-/// <param name="LastPlayed">When they last played it (UTC).</param>
+/// <param name="LastPlayed">When they last played it (UTC); now, for live watchers.</param>
 /// <param name="Finished">Whether they finished it.</param>
 /// <param name="Detail">Extra context such as "S2:E5" for grouped series.</param>
-public sealed record Watcher(Guid UserId, string UserName, string? ImageTag, DateTime LastPlayed, bool Finished, string? Detail);
+/// <param name="IsLive">Whether they are playing it right now.</param>
+/// <param name="Progress">For live watchers, how far through they are (0–1), when known.</param>
+/// <param name="IsPaused">For live watchers, whether playback is paused.</param>
+public sealed record Watcher(
+    Guid UserId,
+    string UserName,
+    string? ImageTag,
+    DateTime LastPlayed,
+    bool Finished,
+    string? Detail,
+    bool IsLive = false,
+    double? Progress = null,
+    bool IsPaused = false);
 
 /// <summary>A card on the shelf and the people who watched it.</summary>
 /// <param name="ItemId">The item shown on the card (a movie, an episode, or a series when grouped).</param>
-/// <param name="Watchers">Who watched it, most recent first.</param>
+/// <param name="Watchers">Who watched it: live watchers first, then most recent first.</param>
 public sealed record ActivityEntry(Guid ItemId, IReadOnlyList<Watcher> Watchers)
 {
     /// <summary>Gets the most recent play across all watchers.</summary>
-    public DateTime LastPlayed => Watchers.Count > 0 ? Watchers[0].LastPlayed : DateTime.MinValue;
+    public DateTime LastPlayed => Watchers.Count > 0 ? Watchers.Max(w => w.LastPlayed) : DateTime.MinValue;
+
+    /// <summary>Gets a value indicating whether anyone is watching this right now.</summary>
+    public bool HasLive => Watchers.Any(w => w.IsLive);
 }
 
 /// <summary>
 /// Builds the server-wide "who watched what recently" snapshot from Jellyfin's own
-/// per-user play data (no Playback Reporting dependency), then filters it per viewer.
+/// per-user play data (no Playback Reporting dependency), overlays who is watching
+/// right now from active sessions, then filters it per viewer.
 /// </summary>
 public class RecentActivityService
 {
@@ -41,16 +58,23 @@ public class RecentActivityService
     private readonly IUserManager _userManager;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserDataManager _userDataManager;
+    private readonly ISessionManager _sessionManager;
     private readonly ILogger _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RecentActivityService"/> class.
     /// </summary>
-    public RecentActivityService(IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataManager, ILogger logger)
+    public RecentActivityService(
+        IUserManager userManager,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        ISessionManager sessionManager,
+        ILogger logger)
     {
         _userManager = userManager;
         _libraryManager = libraryManager;
         _userDataManager = userDataManager;
+        _sessionManager = sessionManager;
         _logger = logger;
     }
 
@@ -67,7 +91,7 @@ public class RecentActivityService
 
     /// <summary>
     /// Gets the shelf for one viewer: only items that viewer is allowed to see,
-    /// optionally without their own activity, newest first.
+    /// optionally without their own activity. Items someone is watching right now come first.
     /// </summary>
     /// <param name="viewer">The user looking at their home screen.</param>
     /// <returns>Shelf entries with their watchers.</returns>
@@ -76,7 +100,7 @@ public class RecentActivityService
         PluginConfiguration config = Config;
         List<(BaseItem, ActivityEntry)> shelf = new();
 
-        foreach (ActivityEntry entry in GetSnapshot())
+        foreach (ActivityEntry entry in MergeLive(GetSnapshot(), config))
         {
             IReadOnlyList<Watcher> watchers = config.HideOwnActivity
                 ? entry.Watchers.Where(w => w.UserId != viewer.Id).ToList()
@@ -136,18 +160,125 @@ public class RecentActivityService
         return snapshot;
     }
 
+    /// <summary>
+    /// Overlays live sessions on the (cached) history. Never cached itself: sessions change by the second.
+    /// </summary>
+    private List<ActivityEntry> MergeLive(List<ActivityEntry> history, PluginConfiguration config)
+    {
+        if (!config.ShowLiveSessions)
+        {
+            return history;
+        }
+
+        List<(Guid CardId, Watcher Watcher)> live;
+        try
+        {
+            live = GetLiveWatchers(config);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[WatchedTogether] Failed to read active sessions");
+            return history;
+        }
+
+        if (live.Count == 0)
+        {
+            return history;
+        }
+
+        // Copy so the cached snapshot is never modified.
+        Dictionary<Guid, List<Watcher>> byCard = history.ToDictionary(e => e.ItemId, e => e.Watchers.ToList());
+        foreach ((Guid cardId, Watcher watcher) in live)
+        {
+            if (!byCard.TryGetValue(cardId, out List<Watcher>? list))
+            {
+                list = new List<Watcher>();
+                byCard[cardId] = list;
+            }
+
+            // A live watcher replaces that person's older history entry on the same card.
+            list.RemoveAll(w => w.UserId == watcher.UserId && !w.IsLive);
+            if (!list.Any(w => w.UserId == watcher.UserId))
+            {
+                list.Add(watcher);
+            }
+        }
+
+        return byCard
+            .Select(kv => new ActivityEntry(
+                kv.Key,
+                kv.Value.OrderByDescending(w => w.IsLive).ThenByDescending(w => w.LastPlayed).ToList()))
+            .OrderByDescending(e => e.HasLive)
+            .ThenByDescending(e => e.LastPlayed)
+            .ToList();
+    }
+
+    private List<(Guid CardId, Watcher Watcher)> GetLiveWatchers(PluginConfiguration config)
+    {
+        Filters filters = Filters.From(config);
+        List<(Guid, Watcher)> result = new();
+        HashSet<(Guid UserId, Guid CardId)> seen = new();
+        Dictionary<Guid, bool> libraryAllowedCache = new();
+
+        foreach (SessionInfo session in _sessionManager.Sessions)
+        {
+            if (session.UserId == Guid.Empty || session.NowPlayingItem == null || filters.IsUserExcluded(session.UserId))
+            {
+                continue;
+            }
+
+            BaseItem? item = session.FullNowPlayingItem ?? _libraryManager.GetItemById(session.NowPlayingItem.Id);
+            if (item == null || !filters.Kinds.Contains(item.GetBaseItemKind()))
+            {
+                continue;
+            }
+
+            User? user = _userManager.GetUserById(session.UserId);
+            if (user == null || user.HasPermission(PermissionKind.IsDisabled))
+            {
+                continue;
+            }
+
+            if (!IsLibraryAllowed(item, filters.ExcludedLibraries, libraryAllowedCache))
+            {
+                continue;
+            }
+
+            (Guid cardId, string? detail) = ResolveCard(item, config);
+            if (!seen.Add((user.Id, cardId)))
+            {
+                continue;
+            }
+
+            double? progress = null;
+            long? position = session.PlayState?.PositionTicks;
+            if (position.HasValue && item.RunTimeTicks is > 0)
+            {
+                progress = Math.Clamp((double)position.Value / item.RunTimeTicks.Value, 0, 1);
+            }
+
+            result.Add((cardId, new Watcher(
+                user.Id,
+                user.Username,
+                ImageTagFor(user),
+                DateTime.UtcNow,
+                false,
+                detail,
+                IsLive: true,
+                Progress: progress,
+                IsPaused: session.PlayState?.IsPaused ?? false)));
+        }
+
+        return result;
+    }
+
     private List<ActivityEntry> BuildSnapshot()
     {
         PluginConfiguration config = Config;
+        Filters filters = Filters.From(config);
         DateTime cutoff = DateTime.UtcNow.AddDays(-Math.Max(1, config.LookbackDays));
-        HashSet<string> excludedUsers = new(config.ExcludedUserIds ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-        HashSet<Guid> excludedLibraries = (config.ExcludedLibraryIds ?? Array.Empty<string>())
-            .Select(s => Guid.TryParse(s, out Guid g) ? g : Guid.Empty)
-            .Where(g => g != Guid.Empty)
-            .ToHashSet();
 
-        BaseItemKind[] kinds = GetIncludedKinds(config);
-        if (kinds.Length == 0)
+        if (filters.Kinds.Length == 0)
         {
             return new List<ActivityEntry>();
         }
@@ -158,17 +289,12 @@ public class RecentActivityService
 
         foreach (User user in _userManager.GetUsers())
         {
-            if (excludedUsers.Contains(user.Id.ToString()) || excludedUsers.Contains(user.Id.ToString("N")))
+            if (filters.IsUserExcluded(user.Id) || user.HasPermission(PermissionKind.IsDisabled))
             {
                 continue;
             }
 
-            if (user.HasPermission(PermissionKind.IsDisabled))
-            {
-                continue;
-            }
-
-            foreach (BaseItem item in GetRecentlyPlayed(user, kinds, config))
+            foreach (BaseItem item in GetRecentlyPlayed(user, filters.Kinds, config))
             {
                 UserItemData? data = _userDataManager.GetUserData(user, item);
                 if (data?.LastPlayedDate == null || data.LastPlayedDate.Value < cutoff)
@@ -181,27 +307,17 @@ public class RecentActivityService
                     continue;
                 }
 
-                if (!IsLibraryAllowed(item, excludedLibraries, libraryAllowedCache))
+                if (!IsLibraryAllowed(item, filters.ExcludedLibraries, libraryAllowedCache))
                 {
                     continue;
                 }
 
-                Guid cardId = item.Id;
-                string? detail = null;
-                if (config.GroupEpisodesBySeries && item is Episode episode)
-                {
-                    Guid seriesId = episode.SeriesId != Guid.Empty ? episode.SeriesId : episode.FindSeriesId();
-                    if (seriesId != Guid.Empty)
-                    {
-                        cardId = seriesId;
-                        detail = FormatEpisode(episode);
-                    }
-                }
+                (Guid cardId, string? detail) = ResolveCard(item, config);
 
                 Watcher watcher = new(
                     user.Id,
                     user.Username,
-                    user.ProfileImage == null ? null : user.ProfileImage.LastModified.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ImageTagFor(user),
                     data.LastPlayedDate.Value,
                     data.Played,
                     detail);
@@ -270,25 +386,25 @@ public class RecentActivityService
         return allowed;
     }
 
-    private static BaseItemKind[] GetIncludedKinds(PluginConfiguration config)
+    private static (Guid CardId, string? Detail) ResolveCard(BaseItem item, PluginConfiguration config)
     {
-        List<BaseItemKind> kinds = new();
-        if (config.IncludeMovies)
+        if (config.GroupEpisodesBySeries && item is Episode episode)
         {
-            kinds.Add(BaseItemKind.Movie);
+            Guid seriesId = episode.SeriesId != Guid.Empty ? episode.SeriesId : episode.FindSeriesId();
+            if (seriesId != Guid.Empty)
+            {
+                return (seriesId, FormatEpisode(episode));
+            }
         }
 
-        if (config.IncludeEpisodes)
-        {
-            kinds.Add(BaseItemKind.Episode);
-        }
+        return (item.Id, null);
+    }
 
-        if (config.IncludeMusicVideos)
-        {
-            kinds.Add(BaseItemKind.MusicVideo);
-        }
-
-        return kinds.ToArray();
+    private static string? ImageTagFor(User user)
+    {
+        return user.ProfileImage == null
+            ? null
+            : user.ProfileImage.LastModified.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static string? FormatEpisode(Episode episode)
@@ -301,5 +417,49 @@ public class RecentActivityService
         }
 
         return number.HasValue ? $"E{number.Value}" : null;
+    }
+
+    /// <summary>The admin's include/exclude settings, parsed once per build.</summary>
+    private sealed class Filters
+    {
+        private HashSet<string> _excludedUsers = new(StringComparer.OrdinalIgnoreCase);
+
+        public HashSet<Guid> ExcludedLibraries { get; private set; } = new();
+
+        public BaseItemKind[] Kinds { get; private set; } = Array.Empty<BaseItemKind>();
+
+        public static Filters From(PluginConfiguration config)
+        {
+            List<BaseItemKind> kinds = new();
+            if (config.IncludeMovies)
+            {
+                kinds.Add(BaseItemKind.Movie);
+            }
+
+            if (config.IncludeEpisodes)
+            {
+                kinds.Add(BaseItemKind.Episode);
+            }
+
+            if (config.IncludeMusicVideos)
+            {
+                kinds.Add(BaseItemKind.MusicVideo);
+            }
+
+            return new Filters
+            {
+                _excludedUsers = new HashSet<string>(config.ExcludedUserIds ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+                ExcludedLibraries = (config.ExcludedLibraryIds ?? Array.Empty<string>())
+                    .Select(s => Guid.TryParse(s, out Guid g) ? g : Guid.Empty)
+                    .Where(g => g != Guid.Empty)
+                    .ToHashSet(),
+                Kinds = kinds.ToArray()
+            };
+        }
+
+        public bool IsUserExcluded(Guid userId)
+        {
+            return _excludedUsers.Contains(userId.ToString()) || _excludedUsers.Contains(userId.ToString("N"));
+        }
     }
 }

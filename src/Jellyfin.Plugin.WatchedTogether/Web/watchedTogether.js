@@ -22,7 +22,8 @@
         fetchedAt: 0,
         userId: null,
         pending: null,
-        scheduled: false
+        scheduled: false,
+        liveRefreshMs: 0
     };
 
     // ---------- helpers ----------
@@ -102,7 +103,7 @@
         return client.getUrl('UserImage', {
             userId: pick(watcher, 'UserId'),
             tag: tag,
-            maxWidth: 96,
+            maxWidth: 192,
             quality: 90
         });
     }
@@ -146,24 +147,29 @@
 
     // ---------- rendering ----------
 
+    function percent(p) {
+        return (typeof p === 'number' && isFinite(p)) ? Math.round(p * 100) + '%' : null;
+    }
+
     function buildAvatarsHtml(watchers, max) {
         var html = '';
         var shown = watchers.slice(0, max);
         shown.forEach(function (w, index) {
             var name = pick(w, 'Name');
             var url = avatarUrl(w);
-            var style = 'z-index:' + (max - index) + ';background-color:' + colourFor(name) + ';';
-            html += '<span class="wt-avatar" style="' + style + '" data-initials="' + escapeHtml(initials(name)) + '">';
+            var live = pick(w, 'IsLive') ? ' wt-avatar-live' : '';
+            var style = 'z-index:' + (max - index + 1) + ';background-color:' + colourFor(name) + ';';
+            html += '<span class="wt-avatar' + live + '" style="' + style + '" data-initials="' + escapeHtml(initials(name)) + '">';
             if (url) {
                 html += '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(name) + '" loading="lazy" />';
             } else {
-                html += escapeHtml(initials(name));
+                html += '<span class="wt-initials">' + escapeHtml(initials(name)) + '</span>';
             }
             html += '</span>';
         });
 
         if (watchers.length > max) {
-            html += '<span class="wt-avatar wt-more">+' + (watchers.length - max) + '</span>';
+            html += '<span class="wt-avatar wt-more"><span class="wt-initials">+' + (watchers.length - max) + '</span></span>';
         }
 
         return html;
@@ -174,18 +180,44 @@
             var line = pick(w, 'Name');
             var detail = pick(w, 'Detail');
             if (detail) { line += ' — ' + detail; }
-            line += pick(w, 'Finished') ? ' (finished' : ' (watching';
+            if (pick(w, 'IsLive')) {
+                var pct = percent(pick(w, 'Progress'));
+                line += pick(w, 'IsPaused') ? ' (paused' : ' (watching now';
+                line += pct ? ', ' + pct + ')' : ')';
+                return line;
+            }
+            line += pick(w, 'Finished') ? ' (finished' : ' (watched';
             var ago = timeAgo(pick(w, 'LastPlayed'));
             line += ago ? ', ' + ago + ')' : ')';
             return line;
         }).join('\n');
     }
 
-    function decorateCard(card, watchers, settings) {
-        // Remove an older decoration (cards can be reused after a refresh).
-        Array.prototype.forEach.call(card.querySelectorAll('.wt-avatars, .wt-caption'), function (el) {
+    function captionFor(watchers) {
+        var live = watchers.filter(function (w) { return pick(w, 'IsLive'); });
+        if (live.length === 0) {
+            return { live: false, text: joinNames(watchers.map(function (w) { return pick(w, 'Name'); })) };
+        }
+
+        if (live.length === 1) {
+            var w = live[0];
+            var pct = percent(pick(w, 'Progress'));
+            var verb = pick(w, 'IsPaused') ? ' paused' : ' is watching';
+            return { live: true, text: pick(w, 'Name') + verb + (pct ? ' · ' + pct : '') };
+        }
+
+        return { live: true, text: joinNames(live.map(function (x) { return pick(x, 'Name'); })) + ' are watching' };
+    }
+
+    function removeDecorations(card) {
+        Array.prototype.forEach.call(card.querySelectorAll('.wt-avatars, .wt-caption, .wt-live-progress'), function (el) {
             el.parentNode.removeChild(el);
         });
+    }
+
+    function decorateCard(card, watchers, settings) {
+        // Remove an older decoration (cards are redrawn on every refresh).
+        removeDecorations(card);
 
         if (!watchers || watchers.length === 0) {
             card.setAttribute(DECORATED_ATTR, String(state.fetchedAt));
@@ -194,33 +226,57 @@
 
         var tooltip = tooltipFor(watchers);
         var names = watchers.map(function (w) { return pick(w, 'Name'); });
+        var firstLive = watchers.filter(function (w) { return pick(w, 'IsLive'); })[0];
+        var host = card.querySelector('.cardScalable') || card.querySelector('.cardBox') || card;
 
-        if (settings.showAvatars) {
-            var host = card.querySelector('.cardScalable') || card.querySelector('.cardBox') || card;
+        // Sizes are relative to the card's width (container query units), so they scale with the screen.
+        host.classList.add('wt-host');
+        host.style.setProperty('--wt-pct', String(settings.sizePct));
+
+        if (settings.showAvatars || firstLive) {
             var wrap = document.createElement('div');
             wrap.className = 'wt-avatars';
-            wrap.setAttribute('title', 'Watched by ' + tooltip.replace(/\n/g, ', '));
-            wrap.setAttribute('aria-label', 'Watched by ' + names.join(', '));
-            wrap.innerHTML = buildAvatarsHtml(watchers, settings.maxAvatars);
+            wrap.setAttribute('title', tooltip);
+            wrap.setAttribute('aria-label', (firstLive ? 'Watching now: ' : 'Watched by ') + names.join(', '));
+            var html = settings.showAvatars ? buildAvatarsHtml(watchers, settings.maxAvatars) : '';
+            if (firstLive) {
+                html += '<span class="wt-live-pill' + (pick(firstLive, 'IsPaused') ? ' wt-paused' : '') + '">' +
+                    '<span class="wt-live-dot"></span>' + (pick(firstLive, 'IsPaused') ? 'PAUSED' : 'LIVE') + '</span>';
+            }
+            wrap.innerHTML = html;
             host.appendChild(wrap);
 
             Array.prototype.forEach.call(wrap.querySelectorAll('img'), function (img) {
                 img.addEventListener('error', function () {
                     var parent = img.parentNode;
                     if (parent) {
-                        parent.textContent = parent.getAttribute('data-initials') || '?';
+                        parent.innerHTML = '<span class="wt-initials">' + escapeHtml(parent.getAttribute('data-initials') || '?') + '</span>';
                     }
                 }, { once: true });
             });
         }
 
+        if (firstLive) {
+            var progress = pick(firstLive, 'Progress');
+            if (typeof progress === 'number') {
+                var bar = document.createElement('div');
+                bar.className = 'wt-live-progress';
+                bar.setAttribute('title', pick(firstLive, 'Name') + ' is ' + percent(progress) + ' through');
+                bar.innerHTML = '<div class="wt-live-progress-fill" style="width:' + (progress * 100).toFixed(1) + '%"></div>';
+                host.appendChild(bar);
+            }
+        }
+
         if (settings.showCaption) {
             var footerHost = card.querySelector('.cardFooter') || card.querySelector('.cardBox') || card;
+            var info = captionFor(watchers);
             var caption = document.createElement('div');
-            caption.className = 'cardText cardTextCentered cardText-secondary wt-caption';
+            caption.className = 'cardText cardTextCentered cardText-secondary wt-caption' + (info.live ? ' wt-caption-live' : '');
             caption.setAttribute('title', tooltip);
-            caption.innerHTML = '<span class="material-icons wt-caption-icon" aria-hidden="true">visibility</span>' +
-                '<span class="wt-caption-text">' + escapeHtml(joinNames(names)) + '</span>';
+            caption.innerHTML = (info.live
+                ? '<span class="wt-live-dot" aria-hidden="true"></span>'
+                : '<span class="material-icons wt-caption-icon" aria-hidden="true">visibility</span>') +
+                '<span class="wt-caption-text">' + escapeHtml(info.text) + '</span>';
             footerHost.appendChild(caption);
         }
 
@@ -230,6 +286,15 @@
     function findSections() {
         var selector = '.verticalSection.' + (window.CSS && CSS.escape ? CSS.escape(state.sectionId) : state.sectionId);
         return document.querySelectorAll(selector);
+    }
+
+    function settingsFrom(response) {
+        return {
+            showAvatars: pick(response, 'ShowAvatars') !== false,
+            showCaption: pick(response, 'ShowNamesCaption') !== false,
+            maxAvatars: pick(response, 'MaxAvatarsPerCard') || 3,
+            sizePct: pick(response, 'AvatarSizePercent') || 16
+        };
     }
 
     function decorateAll() {
@@ -268,11 +333,8 @@
                 lookup[normaliseId(key)] = items[key];
             });
 
-            var settings = {
-                showAvatars: pick(response, 'ShowAvatars') !== false,
-                showCaption: pick(response, 'ShowNamesCaption') !== false,
-                maxAvatars: pick(response, 'MaxAvatarsPerCard') || 3
-            };
+            var settings = settingsFrom(response);
+            state.liveRefreshMs = (pick(response, 'LiveRefreshSeconds') || 0) * 1000;
 
             undecorated.forEach(function (card) {
                 if (!card.isConnected) { return; }
@@ -285,6 +347,20 @@
         if (state.scheduled) { return; }
         state.scheduled = true;
         setTimeout(decorateAll, 150);
+    }
+
+    // Keep LIVE badges and progress current while the shelf is on screen.
+    function liveTick() {
+        var delay = state.liveRefreshMs || 15000;
+        setTimeout(liveTick, delay);
+
+        if (!state.liveRefreshMs || document.hidden || findSections().length === 0) {
+            return;
+        }
+
+        fetchWatchers(true).then(function (response) {
+            if (response) { schedule(); }
+        });
     }
 
     function start() {
@@ -306,6 +382,7 @@
         }).observe(document.body, { childList: true, subtree: true });
 
         schedule();
+        setTimeout(liveTick, 15000);
     }
 
     start();
