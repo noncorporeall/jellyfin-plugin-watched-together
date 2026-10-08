@@ -91,7 +91,7 @@ public class WatchTogetherController : ControllerBase
         return new IncomingResponse
         {
             Enabled = enabled,
-            Invites = enabled ? _watchTogether.Incoming(me.Id).Select(InviteDto.From).ToList() : new List<InviteDto>()
+            Invites = enabled ? _watchTogether.Incoming(me.Id).Select(i => InviteDto.From(i)).ToList() : new List<InviteDto>()
         };
     }
 
@@ -108,15 +108,17 @@ public class WatchTogetherController : ControllerBase
         }
 
         Invite? invite = _watchTogether.Get(id, me.Id);
-        return invite == null ? NotFound() : InviteDto.From(invite);
+        return invite == null ? NotFound() : InviteDto.From(invite, _watchTogether.IsRequesterPlaying(invite));
     }
 
-    /// <summary>Accept or decline an invite.</summary>
+    /// <summary>
+    /// The asker's page calls this when SyncPlay said it was starting but nothing began playing on
+    /// this device; the server re-joins it and restarts the group's queue at the current position.
+    /// </summary>
     /// <param name="id">Invite id.</param>
-    /// <param name="request">The answer.</param>
-    /// <returns>The updated invite.</returns>
-    [HttpPost("Invites/{id}/Respond")]
-    public ActionResult<InviteDto> Respond([FromRoute] Guid id, [FromBody] RespondRequest request)
+    /// <returns>The invite.</returns>
+    [HttpPost("Invites/{id}/Resync")]
+    public ActionResult<InviteDto> Resync([FromRoute] Guid id)
     {
         User? me = SignedInUser();
         if (me == null)
@@ -124,7 +126,24 @@ public class WatchTogetherController : ControllerBase
             return Unauthorized();
         }
 
-        Invite? invite = _watchTogether.Respond(id, me, DeviceId(), request.Accept);
+        Invite? invite = _watchTogether.Resync(id, me, DeviceId());
+        return invite == null ? NotFound() : InviteDto.From(invite, _watchTogether.IsRequesterPlaying(invite));
+    }
+
+    /// <summary>Accept or decline an invite.</summary>
+    /// <param name="id">Invite id.</param>
+    /// <param name="request">The answer.</param>
+    /// <returns>The updated invite.</returns>
+    [HttpPost("Invites/{id}/Respond")]
+    public async Task<ActionResult<InviteDto>> Respond([FromRoute] Guid id, [FromBody] RespondRequest request)
+    {
+        User? me = SignedInUser();
+        if (me == null)
+        {
+            return Unauthorized();
+        }
+
+        Invite? invite = await _watchTogether.RespondAsync(id, me, DeviceId(), request.Accept).ConfigureAwait(false);
         return invite == null ? NotFound() : InviteDto.From(invite);
     }
 
@@ -245,14 +264,19 @@ public class InviteDto
     /// <summary>Gets or sets an explanation for Failed.</summary>
     public string? Message { get; set; }
 
+    /// <summary>Gets or sets a value indicating whether the asker's device is playing (after acceptance).</summary>
+    public bool RequesterPlaying { get; set; }
+
     /// <summary>Gets or sets seconds left before a pending invite expires.</summary>
     public int SecondsLeft { get; set; }
 
     /// <summary>Maps an invite.</summary>
     /// <param name="invite">The invite.</param>
+    /// <param name="requesterPlaying">Whether the asker's device is playing.</param>
     /// <returns>The DTO.</returns>
-    public static InviteDto From(Invite invite) => new()
+    public static InviteDto From(Invite invite, bool requesterPlaying = false) => new()
     {
+        RequesterPlaying = requesterPlaying,
         Id = invite.Id.ToString("N"),
         FromUserId = invite.FromUserId.ToString("N"),
         FromName = invite.FromName,

@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Controller.SyncPlay.PlaybackRequests;
 using MediaBrowser.Controller.SyncPlay.Requests;
+using MediaBrowser.Model.Session;
 using MediaBrowser.Model.SyncPlay;
 using Microsoft.Extensions.Logging;
 
@@ -75,6 +76,9 @@ public sealed class Invite
 
     /// <summary>Gets or sets a human-readable reason for Failed.</summary>
     public string? Message { get; set; }
+
+    /// <summary>Gets or sets how many times the asker's playback has been nudged to start.</summary>
+    public int Resyncs { get; set; }
 }
 
 /// <summary>Result of asking to watch with someone.</summary>
@@ -156,7 +160,15 @@ public class WatchTogetherService
             {
                 _syncPlayManager.JoinGroup(fromSession, new JoinGroupRequest(group.GroupId), CancellationToken.None);
                 _logger.LogInformation("[WatchedTogether] {From} joined {To}'s existing SyncPlay group", from.Username, target.Username);
-                return new InviteResult("Joined", null, null);
+
+                // Recorded as an already-accepted invite so the asker's page can check that playback
+                // really starts and nudge it if not (see Resync).
+                Invite joined = NewInvite(from, fromSession.DeviceId, target, item);
+                joined.Status = InviteStatus.Accepted;
+                joined.GroupId = group.GroupId;
+                joined.RequesterJoined = true;
+                Invites[joined.Id] = joined;
+                return new InviteResult("Joined", joined, null);
             }
         }
 
@@ -168,17 +180,7 @@ public class WatchTogetherService
             return new InviteResult("Invited", existing, null);
         }
 
-        Invite invite = new()
-        {
-            FromUserId = from.Id,
-            FromName = from.Username,
-            FromImageTag = from.ProfileImage?.LastModified.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            FromDeviceId = fromDeviceId,
-            ToUserId = target.Id,
-            ToName = target.Username,
-            ItemId = item.Id,
-            ItemName = DisplayName(item)
-        };
+        Invite invite = NewInvite(from, fromDeviceId, target, item);
         Invites[invite.Id] = invite;
         _logger.LogInformation("[WatchedTogether] {From} asked to watch {Item} with {To}", from.Username, invite.ItemName, target.Username);
         return new InviteResult("Invited", invite, null);
@@ -204,10 +206,11 @@ public class WatchTogetherService
     }
 
     /// <summary>
-    /// The recipient answers. On yes: a SyncPlay group is created from the recipient's playing
-    /// session at its current position, and the asker's session is joined to it.
+    /// The recipient answers. On yes: their playback is paused and allowed to settle (SyncPlay
+    /// starts much more reliably from a paused player), then a SyncPlay group is created from
+    /// that session at its exact position and the asker's session is joined to it.
     /// </summary>
-    public Invite? Respond(Guid inviteId, User recipient, string? recipientDeviceId, bool accept)
+    public async Task<Invite?> RespondAsync(Guid inviteId, User recipient, string? recipientDeviceId, bool accept)
     {
         Invite? invite = Get(inviteId, recipient.Id);
         if (invite == null || invite.ToUserId != recipient.Id || invite.Status != InviteStatus.Pending)
@@ -232,7 +235,14 @@ public class WatchTogetherService
             SessionInfo session = FindPlayingSession(recipient.Id, recipientDeviceId)
                 ?? throw new InvalidOperationException("You're no longer playing anything.");
 
-            Guid itemId = session.NowPlayingItem!.Id;
+            await PauseAndSettleAsync(session).ConfigureAwait(false);
+
+            if (session.NowPlayingItem == null)
+            {
+                throw new InvalidOperationException("You're no longer playing anything.");
+            }
+
+            Guid itemId = session.NowPlayingItem.Id;
             long position = session.PlayState?.PositionTicks ?? 0;
 
             GroupInfoDto group = _syncPlayManager.NewGroup(
@@ -266,6 +276,114 @@ public class WatchTogetherService
 
         return invite;
     }
+
+    /// <summary>Whether the asker's device has started playing (used by the asker's page to spot a stalled start).</summary>
+    public bool IsRequesterPlaying(Invite invite)
+    {
+        return invite.Status == InviteStatus.Accepted
+            && FindSession(invite.FromUserId, invite.FromDeviceId)?.NowPlayingItem != null;
+    }
+
+    /// <summary>
+    /// Called by the asker's page when SyncPlay said it was starting but nothing is playing. Puts the
+    /// asker's session (back) in the group and restarts the group's queue at the current position,
+    /// which gives every member a fresh "start playing" signal and makes the group wait for all of them.
+    /// </summary>
+    public Invite? Resync(Guid inviteId, User requester, string? requesterDeviceId)
+    {
+        Invite? invite = Get(inviteId, requester.Id);
+        if (invite == null || invite.FromUserId != requester.Id || invite.Status != InviteStatus.Accepted || invite.GroupId == null)
+        {
+            return invite;
+        }
+
+        if (invite.Resyncs >= 3)
+        {
+            return invite;
+        }
+
+        try
+        {
+            SessionInfo? fromSession = FindSession(requester.Id, requesterDeviceId ?? invite.FromDeviceId);
+            if (fromSession == null || fromSession.NowPlayingItem != null)
+            {
+                return invite;
+            }
+
+            invite.Resyncs++;
+            Guid groupId = invite.GroupId.Value;
+            if (_syncPlayManager.GetGroup(fromSession, groupId) == null)
+            {
+                invite.Status = InviteStatus.Failed;
+                invite.Message = "The watch party has already ended.";
+                return invite;
+            }
+
+            // Where the group is: the other person's player (paused by SyncPlay while it waits for us).
+            SessionInfo? anchor = FindPlayingSession(invite.ToUserId, null);
+            Guid itemId = anchor?.NowPlayingItem?.Id ?? invite.ItemId;
+            long position = anchor?.PlayState?.PositionTicks ?? 0;
+
+            _syncPlayManager.JoinGroup(fromSession, new JoinGroupRequest(groupId), CancellationToken.None);
+            invite.RequesterJoined = true;
+            _syncPlayManager.HandleRequest(fromSession, new PlayGroupRequest(new[] { itemId }, 0, position), CancellationToken.None);
+
+            _logger.LogInformation("[WatchedTogether] Nudged SyncPlay start for {From} in group {Group} (attempt {Attempt})", requester.Username, groupId, invite.Resyncs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[WatchedTogether] Could not restart SyncPlay for invite {Invite}", invite.Id);
+        }
+
+        return invite;
+    }
+
+    /// <summary>
+    /// Pauses the session if it is playing and waits briefly until it reports being paused, so the
+    /// group starts from an exact position and from the same state every time.
+    /// </summary>
+    private async Task PauseAndSettleAsync(SessionInfo session)
+    {
+        if (session.PlayState?.IsPaused == true)
+        {
+            return;
+        }
+
+        try
+        {
+            await _sessionManager.SendPlaystateCommand(
+                null!,
+                session.Id,
+                new PlaystateRequest { Command = PlaystateCommand.Pause },
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Some clients can't be remote-controlled; SyncPlay will still try from a playing player.
+            _logger.LogDebug(ex, "[WatchedTogether] Could not pause session {Session} before starting SyncPlay", session.Id);
+            return;
+        }
+
+        for (int i = 0; i < 20 && session.PlayState?.IsPaused != true; i++)
+        {
+            await Task.Delay(150).ConfigureAwait(false);
+        }
+
+        // Let the paused position report land.
+        await Task.Delay(250).ConfigureAwait(false);
+    }
+
+    private static Invite NewInvite(User from, string? fromDeviceId, User target, BaseItem item) => new()
+    {
+        FromUserId = from.Id,
+        FromName = from.Username,
+        FromImageTag = from.ProfileImage?.LastModified.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        FromDeviceId = fromDeviceId,
+        ToUserId = target.Id,
+        ToName = target.Username,
+        ItemId = item.Id,
+        ItemName = DisplayName(item)
+    };
 
     private SessionInfo? FindSession(Guid userId, string? deviceId)
     {

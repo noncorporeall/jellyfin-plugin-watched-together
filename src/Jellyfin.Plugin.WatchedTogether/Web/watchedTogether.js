@@ -485,32 +485,44 @@
      * Someone started watching something that isn't on the shelf yet: ask the shelf's
      * items container (set up by Home Screen Sections) to fetch and redraw itself.
      */
-    function refreshShelfIfLiveMissing(response) {
+    function refreshShelfIfOutOfOrder(response) {
         var lookup = lookupFrom(response);
-        var liveIds = Object.keys(lookup).filter(function (id) {
-            return (lookup[id] || []).some(function (w) { return pick(w, 'IsLive'); });
-        }).sort();
+        var order = (pick(response, 'Order') || []).map(normaliseId);
+        if (!order.length) { return; }
 
-        var sig = liveIds.join(',');
-        if (!sig || sig === state.lastShelfRefreshSig) {
-            return;
-        }
+        // How far into the shelf the live cards reach; everything up to there must match the server.
+        var reach = 0;
+        order.forEach(function (id, index) {
+            if ((lookup[id] || []).some(function (w) { return pick(w, 'IsLive'); })) { reach = index + 1; }
+        });
+        if (!reach) { return; }
+
+        var expected = order.slice(0, reach);
+        var sig = expected.join(',');
 
         Array.prototype.forEach.call(document.querySelectorAll(sectionSelector(state.sectionId)), function (section) {
-            var onShelf = {};
-            Array.prototype.forEach.call(section.querySelectorAll('.card[data-id]'), function (card) {
-                onShelf[normaliseId(card.getAttribute('data-id'))] = true;
-            });
-
-            var missing = liveIds.some(function (id) { return !onShelf[id]; });
             var container = section.querySelector('.itemsContainer');
-            if (missing && container) {
-                state.lastShelfRefreshSig = sig;
-                if (typeof container.refreshItems === 'function') {
-                    container.refreshItems();
-                } else if (typeof container.notifyRefreshNeeded === 'function') {
-                    container.notifyRefreshNeeded(true);
-                }
+            if (!container) { return; }
+
+            var onPage = Array.prototype.map.call(section.querySelectorAll('.card[data-id]'), function (card) {
+                return normaliseId(card.getAttribute('data-id'));
+            });
+            if (!onPage.length) { return; }
+
+            var inPlace = expected.every(function (id, i) { return onPage[i] === id; });
+            if (inPlace) { return; }
+
+            // One refresh per arrangement (and at most once a minute for the same one), so a shelf
+            // that can't match exactly — e.g. a different card limit — never loops.
+            var now = Date.now();
+            if (container._wtRefreshSig === sig && now - (container._wtRefreshAt || 0) < 60000) { return; }
+            container._wtRefreshSig = sig;
+            container._wtRefreshAt = now;
+
+            if (typeof container.refreshItems === 'function') {
+                container.refreshItems();
+            } else if (typeof container.notifyRefreshNeeded === 'function') {
+                container.notifyRefreshNeeded(true);
             }
         });
     }
@@ -731,6 +743,8 @@
             var outcome = pick(result, 'Outcome');
             if (outcome === 'Joined') {
                 toast('Joining <b>' + escapeHtml(target.name) + '</b>\'s watch party…');
+                var joined = pick(result, 'Invite');
+                if (joined) { watchSyncPlayStart(pick(joined, 'Id')); }
                 return;
             }
             if (outcome !== 'Invited') {
@@ -762,6 +776,7 @@
                             toast('Couldn\'t join the SyncPlay group. Try joining it from the SyncPlay menu.');
                         });
                     }
+                    watchSyncPlayStart(inviteId);
                     return;
                 }
                 if (status === 'Declined') {
@@ -779,6 +794,62 @@
         setTimeout(poll, 1500);
     }
 
+    function localPlaybackActive() {
+        var video = document.querySelector('.videoPlayerContainer video, video.htmlvideoplayer');
+        return !!(video && (video.currentSrc || video.src));
+    }
+
+    function pauseLocalPlayback() {
+        var video = document.querySelector('.videoPlayerContainer video, video.htmlvideoplayer');
+        if (video && !video.paused) {
+            try { video.pause(); } catch (e) { /* the server pauses it too */ }
+        }
+    }
+
+    /**
+     * After an invite is accepted, make sure playback really starts on this device. SyncPlay can
+     * occasionally miss the hand-off (the "SyncPlay starting" toast appears but nothing plays); if
+     * so, ask the server to re-join us and restart the group's queue, which every member follows.
+     */
+    function watchSyncPlayStart(inviteId) {
+        if (!inviteId) { return; }
+        var attempts = 0;
+
+        function check() {
+            if (localPlaybackActive()) { return; }
+            var client = apiClient();
+            if (!client) { return; }
+            client.getJSON(client.getUrl('WatchedTogether/Invites/' + inviteId)).then(function (invite) {
+                if (pick(invite, 'RequesterPlaying') || localPlaybackActive()) { return; }
+                if (pick(invite, 'Status') !== 'Accepted') {
+                    if (pick(invite, 'Status') === 'Failed') {
+                        toast(escapeHtml(pick(invite, 'Message') || 'The watch party has ended.'));
+                    }
+                    return;
+                }
+                if (attempts >= 2) {
+                    toast('Playback didn\'t start here. Open the SyncPlay menu at the top and pick the group to join.');
+                    return;
+                }
+                attempts++;
+                toast('<span class="wt-spinner"></span>Getting playback started…');
+                postJson('WatchedTogether/Invites/' + inviteId + '/Resync', {}).then(function (result) {
+                    if (pick(result, 'Status') === 'Failed') {
+                        toast(escapeHtml(pick(result, 'Message') || 'The watch party has ended.'));
+                        return;
+                    }
+                    setTimeout(check, 12000);
+                }, function () {
+                    setTimeout(check, 12000);
+                });
+            }, function () {
+                if (attempts < 3) { attempts++; setTimeout(check, 6000); }
+            });
+        }
+
+        setTimeout(check, 10000);
+    }
+
     function showInvite(invite) {
         var id = pick(invite, 'Id');
         if (state.incomingShown[id] || state.dialogOpen) { return; }
@@ -786,6 +857,12 @@
 
         var from = pick(invite, 'FromName');
         function answer(accept) {
+            if (accept) {
+                // Start from a paused player: SyncPlay picks up the exact position and starts both
+                // of you together far more reliably than from a player that is still running.
+                pauseLocalPlayback();
+                toast('<span class="wt-spinner"></span>Starting SyncPlay with <b>' + escapeHtml(from) + '</b>…', { sticky: true });
+            }
             postJson('WatchedTogether/Invites/' + id + '/Respond', { Accept: accept }).then(function (result) {
                 if (!accept) { return; }
                 if (pick(result, 'Status') === 'Accepted') {
@@ -944,7 +1021,7 @@
 
         fetchWatchers(true).then(function (response) {
             if (!response) { return; }
-            refreshShelfIfLiveMissing(response);
+            refreshShelfIfOutOfOrder(response);
             schedule();
         });
     }

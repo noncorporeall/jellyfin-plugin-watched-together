@@ -57,9 +57,11 @@ public class WatchedTogetherController : ControllerBase
 
         PluginConfiguration config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         Dictionary<string, List<WatcherDto>> items = new();
+        List<string> order = new();
 
         foreach ((MediaBrowser.Controller.Entities.BaseItem item, ActivityEntry entry) in _activity.GetShelfFor(viewer))
         {
+            order.Add(item.Id.ToString("N"));
             items[item.Id.ToString("N")] = entry.Watchers.Select(w => new WatcherDto
             {
                 UserId = w.UserId.ToString("N"),
@@ -86,7 +88,8 @@ public class WatchedTogetherController : ControllerBase
             LiveRefreshSeconds = config.ShowLiveSessions ? 15 : 0,
             WatchTogether = config.ShowLiveSessions && config.EnableWatchTogether,
             ViewerId = viewer.Id.ToString("N"),
-            Items = items
+            Items = items,
+            Order = order
         };
     }
 
@@ -155,6 +158,9 @@ public class WatchersResponse
 
     /// <summary>Gets or sets item id (no dashes) → watchers, newest first.</summary>
     public Dictionary<string, List<WatcherDto>> Items { get; set; } = new();
+
+    /// <summary>Gets or sets the item ids in shelf order (live first), so the page can tell when cards need re-ordering.</summary>
+    public List<string> Order { get; set; } = new();
 }
 
 /// <summary>A watcher as sent to the browser.</summary>
