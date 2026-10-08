@@ -105,6 +105,35 @@
         return !!el && (el.isConnected === undefined ? document.documentElement.contains(el) : el.isConnected);
     }
 
+    /**
+     * Badge size in plain pixels, measured from the card: "Profile picture size" is a % of the
+     * card's width. Pixels work on every engine (Samsung TVs run Chrome 56–76 engines).
+     */
+    function sizeHost(host, pct) {
+        host.classList.add('wt-host');
+        host.setAttribute('data-wt-pct', String(pct));
+        var width = host.clientWidth || host.offsetWidth || 0;
+        if (width > 0) {
+            var size = Math.max(18, Math.round(width * pct / 100));
+            host.style.setProperty('--wt-size', size + 'px');
+        } else {
+            // Not laid out yet (e.g. off-screen): measure again shortly.
+            setTimeout(function () {
+                if (isAttached(host) && (host.clientWidth || host.offsetWidth)) { sizeHost(host, pct); }
+            }, 500);
+        }
+    }
+
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+            Array.prototype.forEach.call(document.querySelectorAll('.wt-host[data-wt-pct]'), function (host) {
+                sizeHost(host, parseFloat(host.getAttribute('data-wt-pct')) || 16);
+            });
+        }, 200);
+    });
+
     function apiClient() {
         return window.ApiClient || null;
     }
@@ -383,8 +412,7 @@
         var firstLive = watchers.filter(function (w) { return pick(w, 'IsLive'); })[0];
 
         // Sizes are relative to the card's width (container query units), so they scale with the screen.
-        host.classList.add('wt-host');
-        host.style.setProperty('--wt-pct', String(settings.sizePct));
+        sizeHost(host, settings.sizePct);
 
         if (settings.showAvatars) {
             var wrap = document.createElement('div');
@@ -840,8 +868,7 @@
 
         var rank = info ? pick(info, 'Rank') : index + 1;
         var host = card.querySelector('.cardScalable') || card.querySelector('.cardBox') || card;
-        host.classList.add('wt-host');
-        host.style.setProperty('--wt-pct', String(pick(response, 'AvatarSizePercent') || 16));
+        sizeHost(host, pick(response, 'AvatarSizePercent') || 16);
 
         var tier = rank === 1 ? 'wt-gold' : rank === 2 ? 'wt-silver' : rank === 3 ? 'wt-bronze' : 'wt-plain';
         var medal = document.createElement('div');
