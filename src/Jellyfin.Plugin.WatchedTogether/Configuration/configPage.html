@@ -30,6 +30,14 @@
                 <div class="inputContainer">
                     <input is="emby-input" type="number" id="MaxItems" min="1" max="100" label="Maximum cards on the shelf" />
                 </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="MoviesPerPerson" min="0" max="50" label="Movies each person adds" />
+                    <div class="fieldDescription">Each person's latest few movies get a card. 0 = none.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="ShowsPerPerson" min="0" max="50" label="Shows each person adds" />
+                    <div class="fieldDescription">Each person's latest few shows get a card (episodes, if "one card per series" is off). Anyone else who watched a card's movie or show within the look-back period still appears on it, even if it isn't one of their own latest.</div>
+                </div>
 
                 <h3 class="sectionTitle">What counts</h3>
                 <div class="checkboxContainer">
@@ -114,8 +122,8 @@
 
                 <h3 class="sectionTitle">Advanced</h3>
                 <div class="inputContainer">
-                    <input is="emby-input" type="number" id="ItemsScannedPerUser" min="5" max="500" label="Recent items scanned per user" />
-                    <div class="fieldDescription">Raise this if busy users crowd others off the shelf.</div>
+                    <input is="emby-input" type="number" id="ItemsScannedPerUser" min="5" max="500" label="History checked per person" />
+                    <div class="fieldDescription">How many of each person's most recent movie plays and episode plays are checked. Raise it if someone who watched a card's item isn't shown on it.</div>
                 </div>
                 <div class="inputContainer">
                     <input is="emby-input" type="number" id="CacheSeconds" min="0" max="3600" label="Refresh interval (seconds)" />
@@ -136,7 +144,7 @@
             var pluginId = 'd73b0b70-2b96-4358-861f-78d5edb72753';
             var page = document.querySelector('#watchedTogetherConfigPage');
             var textFields = ['SectionTitle', 'PopularMoviesTitle', 'PopularShowsTitle'];
-            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'AvatarSizePercent', 'PopularDays', 'PopularCount', 'ItemsScannedPerUser', 'CacheSeconds'];
+            var numberFields = ['LookbackDays', 'MaxItems', 'MaxAvatarsPerCard', 'AvatarSizePercent', 'PopularDays', 'PopularCount', 'MoviesPerPerson', 'ShowsPerPerson', 'ItemsScannedPerUser', 'CacheSeconds'];
             var boolFields = ['IncludeMovies', 'IncludeEpisodes', 'IncludeMusicVideos', 'IncludeInProgress',
                 'GroupEpisodesBySeries', 'HideOwnActivity', 'ShowAvatars', 'ShowNamesCaption', 'ShowLiveSessions', 'EnableWatchTogether', 'PopularMoviesEnabled', 'PopularShowsEnabled'];
 

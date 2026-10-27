@@ -322,6 +322,12 @@ public class RecentActivityService
         }
     }
 
+    /// <summary>
+    /// Builds the shelf in two passes:
+    /// 1. every person adds cards for only their latest few movies and latest few shows;
+    /// 2. each of those cards then lists everyone who watched it within the look-back period,
+    ///    so you still appear on a card someone else added for something you've also seen.
+    /// </summary>
     private List<ActivityEntry> BuildSnapshot()
     {
         PluginConfiguration config = Config;
@@ -333,8 +339,15 @@ public class RecentActivityService
             return new List<ActivityEntry>();
         }
 
-        // key = item shown on the card; value = watcher per user (keep the latest)
-        Dictionary<Guid, Dictionary<Guid, Watcher>> grouped = new();
+        BaseItemKind[] movieKinds = filters.Kinds.Where(k => k != BaseItemKind.Episode).ToArray();
+        BaseItemKind[] showKinds = filters.Kinds.Where(k => k == BaseItemKind.Episode).ToArray();
+        int moviesEach = Math.Clamp(config.MoviesPerPerson, 0, 50);
+        int showsEach = Math.Clamp(config.ShowsPerPerson, 0, 50);
+
+        // Everything each person watched within the look-back period (as far as we scan),
+        // keyed by card: card -> user -> their latest watch of it.
+        Dictionary<Guid, Dictionary<Guid, Watcher>> watched = new();
+        HashSet<Guid> picked = new();
         Dictionary<Guid, bool> libraryAllowedCache = new();
 
         foreach (User user in _userManager.GetUsers())
@@ -344,49 +357,66 @@ public class RecentActivityService
                 continue;
             }
 
-            foreach (BaseItem item in GetRecentlyPlayed(user, filters.Kinds, config))
+            foreach ((BaseItemKind[] kinds, int take) in new[] { (movieKinds, moviesEach), (showKinds, showsEach) })
             {
-                UserItemData? data = _userDataManager.GetUserData(user, item);
-                if (data?.LastPlayedDate == null || data.LastPlayedDate.Value < cutoff)
+                if (kinds.Length == 0)
                 {
                     continue;
                 }
 
-                if (!data.Played && (!config.IncludeInProgress || data.PlaybackPositionTicks <= 0))
+                // This person's cards of this kind, newest first.
+                List<Guid> mine = new();
+                HashSet<Guid> seenCards = new();
+
+                foreach (BaseItem item in GetRecentlyPlayed(user, kinds, config))
                 {
-                    continue;
+                    UserItemData? data = _userDataManager.GetUserData(user, item);
+                    if (data?.LastPlayedDate == null || data.LastPlayedDate.Value < cutoff)
+                    {
+                        continue;
+                    }
+
+                    if (!data.Played && (!config.IncludeInProgress || data.PlaybackPositionTicks <= 0))
+                    {
+                        continue;
+                    }
+
+                    if (!IsLibraryAllowed(item, filters.ExcludedLibraries, libraryAllowedCache))
+                    {
+                        continue;
+                    }
+
+                    (Guid cardId, string? detail) = ResolveCard(item, config);
+                    Watcher watcher = new(user.Id, user.Username, ImageTagFor(user), data.LastPlayedDate.Value, data.Played, detail);
+
+                    if (!watched.TryGetValue(cardId, out Dictionary<Guid, Watcher>? byUser))
+                    {
+                        byUser = new Dictionary<Guid, Watcher>();
+                        watched[cardId] = byUser;
+                    }
+
+                    if (!byUser.TryGetValue(user.Id, out Watcher? existing) || existing.LastPlayed < watcher.LastPlayed)
+                    {
+                        byUser[user.Id] = watcher;
+                    }
+
+                    if (seenCards.Add(cardId))
+                    {
+                        mine.Add(cardId);
+                    }
                 }
 
-                if (!IsLibraryAllowed(item, filters.ExcludedLibraries, libraryAllowedCache))
+                // Several episodes of one show are one card, so pick by the card's latest play.
+                foreach (Guid cardId in mine.OrderByDescending(c => watched[c][user.Id].LastPlayed).Take(take))
                 {
-                    continue;
-                }
-
-                (Guid cardId, string? detail) = ResolveCard(item, config);
-
-                Watcher watcher = new(
-                    user.Id,
-                    user.Username,
-                    ImageTagFor(user),
-                    data.LastPlayedDate.Value,
-                    data.Played,
-                    detail);
-
-                if (!grouped.TryGetValue(cardId, out Dictionary<Guid, Watcher>? byUser))
-                {
-                    byUser = new Dictionary<Guid, Watcher>();
-                    grouped[cardId] = byUser;
-                }
-
-                if (!byUser.TryGetValue(user.Id, out Watcher? existing) || existing.LastPlayed < watcher.LastPlayed)
-                {
-                    byUser[user.Id] = watcher;
+                    picked.Add(cardId);
                 }
             }
         }
 
-        return grouped
-            .Select(kv => new ActivityEntry(kv.Key, kv.Value.Values.OrderByDescending(w => w.LastPlayed).ToList()))
+        // Each picked card lists everyone who watched it, not just whoever picked it.
+        return picked
+            .Select(cardId => new ActivityEntry(cardId, watched[cardId].Values.OrderByDescending(w => w.LastPlayed).ToList()))
             .OrderByDescending(e => e.LastPlayed)
             .ToList();
     }

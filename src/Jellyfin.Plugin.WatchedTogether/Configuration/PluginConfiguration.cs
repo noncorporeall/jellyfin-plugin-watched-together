@@ -16,7 +16,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets the maximum number of cards on the shelf.</summary>
     public int MaxItems { get; set; } = 20;
 
-    /// <summary>Gets or sets how many recent items per user are scanned when building the shelf.</summary>
+    /// <summary>Gets or sets how many of each person's latest movies (and music videos) add a card to the shelf.</summary>
+    public int MoviesPerPerson { get; set; } = 2;
+
+    /// <summary>Gets or sets how many of each person's latest shows (or episodes, when not grouped) add a card to the shelf.</summary>
+    public int ShowsPerPerson { get; set; } = 2;
+
+    /// <summary>
+    /// Gets or sets how far into each person's history (most recent plays, per kind) the server looks
+    /// when picking their cards and when checking who else watched a card.
+    /// </summary>
     public int ItemsScannedPerUser { get; set; } = 40;
 
     /// <summary>Gets or sets a value indicating whether episodes collapse into their series card.</summary>
