@@ -30,6 +30,7 @@ public class PopularityService
 
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(10);
     private static readonly object CacheLock = new();
+    private static readonly object BuildLock = new();
     private static readonly Dictionary<string, (DateTime At, List<PopularEntry> Entries)> Cache = new();
     private static bool _warnedMissingDb;
 
@@ -109,23 +110,35 @@ public class PopularityService
             }
         }
 
-        List<PopularEntry> entries;
-        try
+        // One database read at a time; anyone arriving meanwhile gets that result.
+        lock (BuildLock)
         {
-            entries = BuildRanking(movies, days, config);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[WatchedTogether] Could not read Playback Reporting data for the popularity shelves");
-            entries = new List<PopularEntry>();
-        }
+            lock (CacheLock)
+            {
+                if (Cache.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.At < CacheFor)
+                {
+                    return cached.Entries;
+                }
+            }
 
-        lock (CacheLock)
-        {
-            Cache[key] = (DateTime.UtcNow, entries);
-        }
+            List<PopularEntry> entries;
+            try
+            {
+                entries = BuildRanking(movies, days, config);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[WatchedTogether] Could not read Playback Reporting data for the popularity shelves");
+                entries = new List<PopularEntry>();
+            }
 
-        return entries;
+            lock (CacheLock)
+            {
+                Cache[key] = (DateTime.UtcNow, entries);
+            }
+
+            return entries;
+        }
     }
 
     private List<PopularEntry> BuildRanking(bool movies, int days, PluginConfiguration config)

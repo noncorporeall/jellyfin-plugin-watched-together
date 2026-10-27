@@ -58,6 +58,7 @@ public sealed record ActivityEntry(Guid ItemId, IReadOnlyList<Watcher> Watchers)
 public class RecentActivityService
 {
     private static readonly object CacheLock = new();
+    private static readonly object BuildLock = new();
     private static List<ActivityEntry>? _cachedSnapshot;
     private static DateTime _cachedAtUtc = DateTime.MinValue;
 
@@ -149,24 +150,37 @@ public class RecentActivityService
             }
         }
 
-        List<ActivityEntry> snapshot;
-        try
+        // One rebuild at a time: when the cache expires while several people open their home
+        // screens, the others wait for that rebuild instead of each building their own copy.
+        lock (BuildLock)
         {
-            snapshot = BuildSnapshot();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[WatchedTogether] Failed to build recent activity");
-            snapshot = new List<ActivityEntry>();
-        }
+            lock (CacheLock)
+            {
+                if (_cachedSnapshot != null && DateTime.UtcNow - _cachedAtUtc < TimeSpan.FromSeconds(cacheSeconds))
+                {
+                    return _cachedSnapshot;
+                }
+            }
 
-        lock (CacheLock)
-        {
-            _cachedSnapshot = snapshot;
-            _cachedAtUtc = DateTime.UtcNow;
-        }
+            List<ActivityEntry> snapshot;
+            try
+            {
+                snapshot = BuildSnapshot();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[WatchedTogether] Failed to build recent activity");
+                snapshot = new List<ActivityEntry>();
+            }
 
-        return snapshot;
+            lock (CacheLock)
+            {
+                _cachedSnapshot = snapshot;
+                _cachedAtUtc = DateTime.UtcNow;
+            }
+
+            return snapshot;
+        }
     }
 
     /// <summary>

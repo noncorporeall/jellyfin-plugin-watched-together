@@ -853,7 +853,7 @@
     function showInvite(invite) {
         var id = pick(invite, 'Id');
         if (state.incomingShown[id] || state.dialogOpen) { return; }
-        state.incomingShown[id] = true;
+        state.incomingShown[id] = Date.now();
 
         var from = pick(invite, 'FromName');
         function answer(accept) {
@@ -901,6 +901,11 @@
 
         client.getJSON(client.getUrl('WatchedTogether/Invites/Incoming')).then(function (response) {
             state.incomingDelayMs = pick(response, 'Enabled') === false ? 60000 : 5000;
+            // Invites expire on the server within minutes; forget old ones so this never grows.
+            var cutoff = Date.now() - 10 * 60 * 1000;
+            Object.keys(state.incomingShown).forEach(function (key) {
+                if (state.incomingShown[key] < cutoff) { delete state.incomingShown[key]; }
+            });
             (pick(response, 'Invites') || []).forEach(showInvite);
         }, function () {
             state.incomingDelayMs = 30000;
@@ -1026,6 +1031,13 @@
         });
     }
 
+    /** Only new page content matters; text changes and our own badges, toasts and dialogs don't. */
+    function isRelevantNode(node) {
+        if (!node || node.nodeType !== 1) { return false; }
+        var cls = typeof node.className === 'string' ? node.className : '';
+        return !/(^|\s)wt-/.test(cls);
+    }
+
     function start() {
         if (!document.body) {
             setTimeout(start, 100);
@@ -1035,10 +1047,14 @@
         var Observer = window.MutationObserver || window.WebKitMutationObserver;
         if (Observer) {
             new Observer(function (records) {
+                if (state.scheduled) { return; }
                 for (var i = 0; i < records.length; i++) {
-                    if (records[i].addedNodes && records[i].addedNodes.length > 0) {
-                        schedule();
-                        return;
+                    var added = records[i].addedNodes;
+                    for (var j = 0; added && j < added.length; j++) {
+                        if (isRelevantNode(added[j])) {
+                            schedule();
+                            return;
+                        }
                     }
                 }
             }).observe(document.body, { childList: true, subtree: true });

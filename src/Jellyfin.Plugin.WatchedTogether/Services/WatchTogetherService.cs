@@ -97,6 +97,9 @@ public class WatchTogetherService
     private static readonly TimeSpan KeepAnswered = TimeSpan.FromMinutes(5);
     private static readonly ConcurrentDictionary<Guid, Invite> Invites = new();
 
+    /// <summary>Hard ceiling on remembered invites, whatever happens (normally there are a handful).</summary>
+    private const int MaxInvites = 500;
+
     private readonly ISessionManager _sessionManager;
     private readonly ISyncPlayManager _syncPlayManager;
     private readonly IUserManager _userManager;
@@ -162,7 +165,15 @@ public class WatchTogetherService
                 _logger.LogInformation("[WatchedTogether] {From} joined {To}'s existing SyncPlay group", from.Username, target.Username);
 
                 // Recorded as an already-accepted invite so the asker's page can check that playback
-                // really starts and nudge it if not (see Resync).
+                // really starts and nudge it if not (see Resync). Reuse a recent one for the same
+                // pair and group, so repeated clicks don't pile up records.
+                Invite? recent = Invites.Values.FirstOrDefault(i =>
+                    i.FromUserId == from.Id && i.ToUserId == target.Id && i.Status == InviteStatus.Accepted && i.GroupId == group.GroupId);
+                if (recent != null)
+                {
+                    return new InviteResult("Joined", recent, null);
+                }
+
                 Invite joined = NewInvite(from, fromSession.DeviceId, target, item);
                 joined.Status = InviteStatus.Accepted;
                 joined.GroupId = group.GroupId;
@@ -178,6 +189,11 @@ public class WatchTogetherService
         if (existing != null)
         {
             return new InviteResult("Invited", existing, null);
+        }
+
+        if (Invites.Count >= MaxInvites)
+        {
+            return new InviteResult("Error", null, "Too many requests right now. Try again in a few minutes.");
         }
 
         Invite invite = NewInvite(from, fromDeviceId, target, item);
