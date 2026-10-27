@@ -116,8 +116,8 @@
       }
     ],
     "name": "Watched Together",
-    "description": "Home screen shelf showing what other users on the server watched recently.",
-    "overview": "Adds a 'Recently Watched on This Server' row to the home screen (via Home Screen Sections) with each watcher's profile picture on the card. Requires Home Screen Sections, File Transformation and Plugin Pages.",
+    "description": "Home screen shelves showing what others on the server are watching, have watched, and watch most.",
+    "overview": "Adds 'Recently Watched on This Server' (with each watcher's profile picture, live progress, and polite SyncPlay invites) and 'Most Popular Movies / Shows' shelves to the home screen through Home Screen Sections. Requires Home Screen Sections, File Transformation and Plugin Pages; the popularity shelves also need Playback Reporting.",
     "owner": "noncorporeall",
     "category": "General",
     "imageUrl": ""

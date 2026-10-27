@@ -47,7 +47,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse("d73b0b70-2b96-4358-861f-78d5edb72753");
 
     /// <inheritdoc />
-    public override string Description => "Adds a home screen shelf showing what other users on the server have watched recently, with their profile pictures on each card.";
+    public override string Description => "Adds 'Recently Watched on This Server' (with each watcher's profile picture, live progress, and polite SyncPlay invites) and 'Most Popular Movies / Shows' shelves to the home screen through Home Screen Sections. Requires Home Screen Sections, File Transformation and Plugin Pages; the popularity shelves also need Playback Reporting.";
 
     /// <summary>Gets the server configuration manager (used to read the base URL).</summary>
     internal IServerConfigurationManager ServerConfigurationManager { get; }

@@ -16,10 +16,10 @@ import zipfile
 
 GUID = "d73b0b70-2b96-4358-861f-78d5edb72753"
 NAME = "Watched Together"
-DESCRIPTION = "Home screen shelf showing what other users on the server watched recently."
-OVERVIEW = ("Adds a 'Recently Watched on This Server' row to the home screen (via Home Screen Sections) "
-            "with each watcher's profile picture on the card. Requires Home Screen Sections, "
-            "File Transformation and Plugin Pages.")
+DESCRIPTION = 'Home screen shelves showing what others on the server are watching, have watched, and watch most.'
+OVERVIEW = ("Adds 'Recently Watched on This Server' (with each watcher's profile picture, live progress, and"
+            " polite SyncPlay invites) and 'Most Popular Movies / Shows' shelves to the home screen through "
+            'Home Screen Sections. Requires Home Screen Sections, File Transformation and Plugin Pages; the popularity shelves also need Playback Reporting.')
 CATEGORY = "General"
 
 

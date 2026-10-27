@@ -11,7 +11,9 @@ appear on the TV, and Jellyfin updates reach the TV without reinstalling anythin
   that the Watched Together plugin adds to the server's page.
 - Installs alongside any other Jellyfin build (different app id: `WtJfHost01.JellyfinHosted`).
 
-**Install:** download `WatchedTogether-TV.wgt` from the latest release and install it with the
+**Install:** the server needs the Watched Together plugin. Turn on Developer Mode on the TV, download
+`WatchedTogether-TV.wgt` from the [latest release](https://github.com/noncorporeall/jellyfin-plugin-watched-together/releases/latest)
+and install it with the
 [Samsung Jellyfin Installer](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer)
 ("custom .wgt"), with Developer Mode on. The installer signs it with your Samsung certificate.
 

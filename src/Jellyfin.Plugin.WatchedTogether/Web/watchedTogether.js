@@ -1,8 +1,9 @@
 /*
  * Watched Together — client add-on.
  * Injected into jellyfin-web by File Transformation. It:
- *  - decorates the "recently watched" shelf with watchers' profile pictures, LIVE badges and progress,
- *  - refreshes that shelf in place when someone starts watching something new,
+ *  - decorates the "recently watched" shelf with watchers' profile pictures, a "watched by" caption,
+ *    and a green ring and moving progress bar for anyone watching right now,
+ *  - refreshes that shelf in place so whatever someone starts watching moves to the front,
  *  - when someone clicks a card another person is watching live, offers "watch together"
  *    (a SyncPlay invite) or "watch on my own", and shows incoming invites,
  *  - puts gold / silver / bronze / rank badges on the Most Popular shelves.
@@ -411,7 +412,7 @@
         var names = watchers.map(function (w) { return pick(w, 'Name'); });
         var firstLive = watchers.filter(function (w) { return pick(w, 'IsLive'); })[0];
 
-        // Sizes are relative to the card's width (container query units), so they scale with the screen.
+        // Badge size is a share of the card's width, set in pixels so it works on old TV browsers too.
         sizeHost(host, settings.sizePct);
 
         if (settings.showAvatars) {
@@ -482,7 +483,8 @@
     }
 
     /**
-     * Someone started watching something that isn't on the shelf yet: ask the shelf's
+     * Live items belong at the front of the shelf. When the cards on screen don't match the
+     * server's order (someone started watching something new, or something further along), ask the shelf's
      * items container (set up by Home Screen Sections) to fetch and redraw itself.
      */
     function refreshShelfIfOutOfOrder(response) {
@@ -1016,7 +1018,7 @@
         setTimeout(decorateAll, 150);
     }
 
-    // Keep LIVE badges, progress and the shelf itself current while it's on screen.
+    // Keep live rings, progress and the shelf order current while the shelf is on screen.
     function liveTick() {
         setTimeout(liveTick, state.liveRefreshMs || 15000);
 

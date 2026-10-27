@@ -30,7 +30,7 @@ public class StartupService : IScheduledTask
     public string Key => "Jellyfin.Plugin.WatchedTogether.Startup";
 
     /// <inheritdoc />
-    public string Description => "Registers the Watched Together shelf with Home Screen Sections and injects the avatar badges into the web client.";
+    public string Description => "Registers the Watched Together shelves with Home Screen Sections and adds its script to the web client.";
 
     /// <inheritdoc />
     public string Category => "Startup Services";
@@ -70,7 +70,7 @@ public class StartupService : IScheduledTask
 
         if (!injectionDone)
         {
-            _logger.LogError("[WatchedTogether] Gave up injecting avatar badges. Is 'File Transformation' installed and active?");
+            _logger.LogError("[WatchedTogether] Gave up adding the web client script (profile pictures, live progress, medals, invites). Is 'File Transformation' installed and active?");
         }
 
         progress.Report(100);

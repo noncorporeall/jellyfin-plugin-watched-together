@@ -121,7 +121,7 @@ internal static class IntegrationRegistrar
         Type? pluginInterface = FindPluginInterface(".FileTransformation", "Jellyfin.Plugin.FileTransformation.PluginInterface");
         if (pluginInterface == null)
         {
-            logger.LogWarning("[WatchedTogether] File Transformation is not installed or not loaded yet; avatar badges will not appear.");
+            logger.LogWarning("[WatchedTogether] File Transformation is not installed or not loaded yet; profile pictures, live progress, medals and invites will not appear.");
             return false;
         }
 
@@ -142,7 +142,7 @@ internal static class IntegrationRegistrar
         }
 
         register.Invoke(null, new object?[] { payload });
-        logger.LogInformation("[WatchedTogether] Registered index.html injection for avatar badges");
+        logger.LogInformation("[WatchedTogether] Registered the web client script with File Transformation");
         return true;
     }
 
