@@ -709,9 +709,50 @@
         }
     }
 
-    function showWatchChoice(card, actionEl, live) {
+    /** Whether a live watcher's app can take an invite (older servers don't say, so assume yes). */
+    function canWatchTogether(w) {
+        return pick(w, 'CanWatchTogether') !== false;
+    }
+
+    /**
+     * Shown instead of the invite choice when the person watching is in an app that can't do
+     * SyncPlay (Streamyfin, Swiftfin, Android TV, the PS3 app...): offers to just start watching.
+     */
+    function showCantWatchTogether(card, actionEl, live, message) {
+        var names = joinNames(live.map(function (w) { return pick(w, 'Name'); }));
         var lead = live[0];
+        var app = pick(lead, 'ClientName');
+        var title = card.querySelector('.cardText-first') ? card.querySelector('.cardText-first').textContent.trim() : '';
+        var avatars = live.slice(0, 4).map(function (w) {
+            return avatarHtml(pick(w, 'UserId'), pick(w, 'Name'), pick(w, 'ImageTag'), ' wt-avatar-live', '');
+        }).join('');
+        var why = message ||
+            (live.length > 1
+                ? names + ' are watching in apps that can\'t join SyncPlay.'
+                : pick(lead, 'Name') + ' is watching in ' + (app ? app + ', which' : 'an app that') + ' can\'t join SyncPlay.');
+
+        openDialog({
+            label: 'Can\'t watch together with ' + names,
+            avatarsHtml: avatars,
+            titleHtml: 'Sorry, <b>' + escapeHtml(names) + '</b> can\'t watch together',
+            subtitle: title,
+            note: why + ' Would you like to start watching on your own?',
+            defaultIndex: 0,
+            buttons: [
+                { label: 'Watch on my own', primary: true, onClick: function () { continueOnMyOwn(card, actionEl); } },
+                { label: 'Not now' }
+            ]
+        });
+    }
+
+    function showWatchChoice(card, actionEl, live) {
         var party = partyOf(live);
+        var able = live.filter(canWatchTogether);
+        if (!party && able.length === 0) {
+            showCantWatchTogether(card, actionEl, live);
+            return;
+        }
+        var lead = party ? live[0] : able[0];
         var names = joinNames(live.map(function (w) { return pick(w, 'Name'); }));
         var detail = pick(lead, 'Detail');
         var pct = percent(pick(lead, 'Progress'));
@@ -732,7 +773,11 @@
                 : 'Ask to start SyncPlay from where ' + pick(lead, 'Name') + ' is, or start it yourself.',
             defaultIndex: 0,
             buttons: [
-                { label: party ? 'Join their watch party' : 'Ask to watch together', primary: true, onClick: function () { askToWatchTogether({ id: pick(lead, 'UserId'), name: party ? names : pick(lead, 'Name') }); } },
+                { label: party ? 'Join their watch party' : 'Ask to watch together', primary: true, onClick: function () {
+                    askToWatchTogether({ id: pick(lead, 'UserId'), name: party ? names : pick(lead, 'Name') }, function (message) {
+                        showCantWatchTogether(card, actionEl, [lead], message);
+                    });
+                } },
                 { label: 'Watch on my own', onClick: function () { continueOnMyOwn(card, actionEl); } }
             ]
         });
@@ -740,9 +785,14 @@
 
     // ---------- watch together (SyncPlay invites) ----------
 
-    function askToWatchTogether(target) {
+    function askToWatchTogether(target, onUnsupported) {
         postJson('WatchedTogether/Invites', { UserId: target.id }).then(function (result) {
             var outcome = pick(result, 'Outcome');
+            if (outcome === 'Unsupported' && onUnsupported) {
+                // The page's info was a little out of date; the server knows their app can't do it.
+                onUnsupported(pick(result, 'Message'));
+                return;
+            }
             if (outcome === 'Joined') {
                 toast('Joining <b>' + escapeHtml(target.name) + '</b>\'s watch party…');
                 var joined = pick(result, 'Invite');

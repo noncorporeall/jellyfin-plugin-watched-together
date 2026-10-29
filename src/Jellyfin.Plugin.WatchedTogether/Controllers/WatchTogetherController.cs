@@ -91,7 +91,7 @@ public class WatchTogetherController : ControllerBase
         return new IncomingResponse
         {
             Enabled = enabled,
-            Invites = enabled ? _watchTogether.Incoming(me.Id).Select(i => InviteDto.From(i)).ToList() : new List<InviteDto>()
+            Invites = enabled ? _watchTogether.Incoming(me.Id, DeviceId()).Select(i => InviteDto.From(i)).ToList() : new List<InviteDto>()
         };
     }
 

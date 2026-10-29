@@ -74,7 +74,9 @@ public class WatchedTogetherController : ControllerBase
                 Progress = w.Progress,
                 IsPaused = w.IsPaused,
                 RuntimeSeconds = w.RuntimeSeconds,
-                SyncPlayGroupId = w.SyncPlayGroupId?.ToString("N")
+                SyncPlayGroupId = w.SyncPlayGroupId?.ToString("N"),
+                CanWatchTogether = w.CanWatchTogether,
+                ClientName = w.IsLive ? w.ClientName : null
             }).ToList();
         }
 
@@ -198,4 +200,10 @@ public class WatcherDto
 
     /// <summary>Gets or sets the SyncPlay group they're watching in, if any (members of one party share it).</summary>
     public string? SyncPlayGroupId { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether this live watcher's app can take a watch-together invite.</summary>
+    public bool CanWatchTogether { get; set; } = true;
+
+    /// <summary>Gets or sets the app a live watcher is using (e.g. "Streamyfin"), for the "can't watch together" message.</summary>
+    public string? ClientName { get; set; }
 }

@@ -25,6 +25,8 @@ namespace Jellyfin.Plugin.WatchedTogether.Services;
 /// <param name="IsPaused">For live watchers, whether playback is paused.</param>
 /// <param name="RuntimeSeconds">For live watchers, the item's length, so browsers can animate progress.</param>
 /// <param name="SyncPlayGroupId">For live watchers in a SyncPlay group, the group (so a watch party shows as one).</param>
+/// <param name="CanWatchTogether">For live watchers, whether their app can take a watch-together invite or join SyncPlay.</param>
+/// <param name="ClientName">For live watchers, the app they're watching in (e.g. "Streamyfin").</param>
 public sealed record Watcher(
     Guid UserId,
     string UserName,
@@ -36,7 +38,9 @@ public sealed record Watcher(
     double? Progress = null,
     bool IsPaused = false,
     double? RuntimeSeconds = null,
-    Guid? SyncPlayGroupId = null);
+    Guid? SyncPlayGroupId = null,
+    bool CanWatchTogether = true,
+    string? ClientName = null);
 
 /// <summary>A card on the shelf and the people who watched it.</summary>
 /// <param name="ItemId">The item shown on the card (a movie, an episode, or a series when grouped).</param>
@@ -297,7 +301,9 @@ public class RecentActivityService
                 Progress: progress,
                 IsPaused: session.PlayState?.IsPaused ?? false,
                 RuntimeSeconds: item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / (double)TimeSpan.TicksPerSecond : null,
-                SyncPlayGroupId: groupId)));
+                SyncPlayGroupId: groupId,
+                CanWatchTogether: groupId.HasValue || WatchTogetherService.CanReceiveInvites(user.Id, session.DeviceId),
+                ClientName: session.Client)));
         }
 
         return result;

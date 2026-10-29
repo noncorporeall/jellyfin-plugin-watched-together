@@ -100,6 +100,14 @@ public class WatchTogetherService
     /// <summary>Hard ceiling on remembered invites, whatever happens (normally there are a handful).</summary>
     private const int MaxInvites = 500;
 
+    /// <summary>
+    /// When each device last asked for invites ("userId|deviceId" -> UTC). Only devices running the
+    /// web client (in a browser or a web-based app) do this, so it tells us who can actually see an
+    /// invite. Streamyfin, Swiftfin, Android TV and other native apps never ask.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, DateTime> InvitePolls = new();
+    private static readonly TimeSpan PollFreshFor = TimeSpan.FromSeconds(75);
+
     private readonly ISessionManager _sessionManager;
     private readonly ISyncPlayManager _syncPlayManager;
     private readonly IUserManager _userManager;
@@ -155,6 +163,7 @@ public class WatchTogetherService
 
         // Already in a group? Join it directly — they've opted into shared viewing.
         SessionInfo? fromSession = FindSession(from.Id, fromDeviceId);
+        bool targetInGroup = _syncPlayManager.IsUserActive(target.Id);
         if (fromSession != null && _syncPlayManager.IsUserActive(target.Id))
         {
             GroupInfoDto? group = _syncPlayManager.ListGroups(fromSession, new ListGroupsRequest())
@@ -183,6 +192,12 @@ public class WatchTogetherService
             }
         }
 
+        // Their app can't show an invite or join SyncPlay (e.g. Streamyfin), so don't send one.
+        if (!targetInGroup && !CanReceiveInvites(target.Id, targetSession.DeviceId))
+        {
+            return new InviteResult("Unsupported", null, UnsupportedMessage(target.Username, targetSession.Client));
+        }
+
         // One pending invite per pair at a time.
         Invite? existing = Invites.Values.FirstOrDefault(i =>
             i.FromUserId == from.Id && i.ToUserId == target.Id && i.Status == InviteStatus.Pending);
@@ -202,9 +217,10 @@ public class WatchTogetherService
         return new InviteResult("Invited", invite, null);
     }
 
-    /// <summary>Pending invites addressed to a user.</summary>
-    public IReadOnlyList<Invite> Incoming(Guid userId)
+    /// <summary>Pending invites addressed to a user (and notes that this device can receive them).</summary>
+    public IReadOnlyList<Invite> Incoming(Guid userId, string? deviceId)
     {
+        RecordPoll(userId, deviceId);
         Sweep();
         return Invites.Values
             .Where(i => i.ToUserId == userId && i.Status == InviteStatus.Pending)
@@ -400,6 +416,40 @@ public class WatchTogetherService
         ItemId = item.Id,
         ItemName = DisplayName(item)
     };
+
+    /// <summary>Whether this user's device is running the web client and polling for invites.</summary>
+    public static bool CanReceiveInvites(Guid userId, string? deviceId)
+    {
+        return InvitePolls.TryGetValue(Key(userId, deviceId), out DateTime last) && DateTime.UtcNow - last < PollFreshFor;
+    }
+
+    /// <summary>"Alice is watching in Streamyfin, which can't join SyncPlay."</summary>
+    public static string UnsupportedMessage(string name, string? client)
+    {
+        return string.IsNullOrWhiteSpace(client)
+            ? $"{name} is watching in an app that can't join SyncPlay."
+            : $"{name} is watching in {client}, which can't join SyncPlay.";
+    }
+
+    private static string Key(Guid userId, string? deviceId) => userId.ToString("N") + "|" + (deviceId ?? string.Empty);
+
+    private static void RecordPoll(Guid userId, string? deviceId)
+    {
+        DateTime now = DateTime.UtcNow;
+        InvitePolls[Key(userId, deviceId)] = now;
+
+        // One entry per device; drop devices that stopped polling a while ago.
+        if (InvitePolls.Count > 50)
+        {
+            foreach (KeyValuePair<string, DateTime> entry in InvitePolls)
+            {
+                if (now - entry.Value > TimeSpan.FromMinutes(10))
+                {
+                    InvitePolls.TryRemove(entry.Key, out _);
+                }
+            }
+        }
+    }
 
     private SessionInfo? FindSession(Guid userId, string? deviceId)
     {
